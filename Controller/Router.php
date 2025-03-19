@@ -11,7 +11,8 @@ class Router
     public function __construct()
     {
         // POST, GET, PATCH, PUT, DELETE 중 요청 온 메소드 함수 실행
-        $this->{strtolower($_SERVER['REQUEST_METHOD'])}()->end();
+        // execute() 실행 안되는 경우, analyse() 실행
+        $this->{strtolower($_SERVER['REQUEST_METHOD'])}()->analyse()->end();
     }
 
     private function post(): Router
@@ -90,6 +91,30 @@ class Router
         $body = json_decode(file_get_contents('php://input'), true) ?: [];
 
         (new $class($body, $param))->$function();
+        exit;
+    }
+
+    private function analyse(): Router
+    {
+        // 요청 URL
+        $url = explode('/', parse_url($_SERVER['REQUEST_URI'])['path']);
+
+        // 첫 '/' 제거
+        array_shift($url);
+
+        // 함수명 추출
+        $function = array_pop($url);
+
+        // 컨트롤러 경로 생성
+        $class = '\\Controller\\' . implode('\\', array_map('ucfirst', array_map('strtolower', $url))) . 'Controller';
+
+        // 메소드가 있는지 확인
+        if (!method_exists($class, $function)) return $this;
+
+        // POST, PATCH, PUT, DELETE 메소드의 Body-Content
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+
+        (new $class($body))->$function();
         exit;
     }
 

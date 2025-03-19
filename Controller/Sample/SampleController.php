@@ -31,7 +31,7 @@ class SampleController extends Controller
     public function readFooById(): void
     {
         $sample = new SampleModel();
-        $foo = $sample->readFooById($this->param['id']);
+        $foo = $sample->readFooById($this->param['fooId']);
 
         echo json_encode($foo, JSON_UNESCAPED_UNICODE);
 
