@@ -1,6 +1,14 @@
+<?php global $title, $content; ?>
+<div>
+    <?= $title ?><br/>
+    <?= $GLOBALS['title'] ?><br/>
+    <?= $content ?><br/>
+    <?= $GLOBALS['content'] ?>
+</div>
+
 <div class="sample-box">
     <div class="card sample-card">
-        <img src="/View/assets/images/sample.png" class="card-img-top sample-img" alt="Sample">
+        <img src="/images/sample.png" class="card-img-top sample-img" alt="Sample">
 
         <div class="card-body">
             <h5 class="card-title">Card title</h5>
@@ -10,7 +18,7 @@
     </div>
 
     <div class="card sample-card" aria-hidden="true">
-        <img src="/View/assets/images/sample.png" class="card-img-top sample-img" alt="Sample">
+        <img src="/images/sample.png" class="card-img-top sample-img" alt="Sample">
         <div class="card-body">
             <h5 class="card-title placeholder-glow">
                 <span class="placeholder col-6"></span>

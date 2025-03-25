@@ -10,11 +10,10 @@ set_error_handler(/** @throws ErrorException */function($errNo, $errStr, $errFil
 
 set_exception_handler(function(Throwable $exception) {
     header('Content-type: application/json');
+    http_response_code($exception->getCode());
     exit(json_encode([
         'message' => $exception->getMessage(),
-        'code' => $exception->getCode(),
-        'filename' => basename($exception->getFile()),
-        'line' => $exception->getLine()
+        'code' => $exception->getCode()
     ], JSON_UNESCAPED_UNICODE));
 });
 
@@ -22,13 +21,24 @@ set_exception_handler(function(Throwable $exception) {
 // namespace 값은 폴더 구조에 맞게 지정
 spl_autoload_register(/** @throws Exception */ function($class) {
     $class = str_replace('\\', '/', $class);
-
     if (is_file($class . '.php')) {
         include_once $class . '.php';
     } else {
-        throw new Exception('Not found.', 404);
+        // 폴더 구조에 맞지 않는 클래스 인스턴스가 생성되면
+        // libs 폴더에서 찾아보기
+        $libsPath = 'Variety/resources/libs/';
+        $libClass = strtolower($class);
+
+        if (is_file($libsPath . $libClass . '/' . $libClass . '.php')) {
+            include_once $libsPath . $libClass . '/' . $libClass . '.php';
+        } else {
+            throw new Exception('\'' . $_SERVER['REQUEST_METHOD'] . ' ' . parse_url($_SERVER['REQUEST_URI'])['path'] . '\' Not Exists.', 404);
+        }
     }
 });
+
+// Composer 불러오기
+include_once 'Variety/resources/libs/vendor/autoload.php';
 
 // 라우터 실행
 new Controller\Router();

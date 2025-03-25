@@ -1,2 +1,6 @@
 .*
 !.gitignore
+
+/Variety/resources/libs/*
+!/Variety/resources/libs/composer.json
+!/Variety/resources/libs/package.json

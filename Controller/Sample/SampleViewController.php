@@ -8,6 +8,7 @@ class SampleViewController extends Controller
 {
     public function index(): void
     {
-        $this->view('sample/index');
+        $variables = ['title' => 'Sample', 'content' => 'Sample Content'];
+        $this->view('sample/index', $variables);
     }
 }

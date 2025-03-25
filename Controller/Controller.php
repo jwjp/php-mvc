@@ -33,14 +33,21 @@ abstract class Controller
 
     /**
      * @param string $viewerFile 뷰어 파일 이름
+     * @param array $variables 전달할 변수
      * @param string $headerFile 헤더 파일 이름
      * @param string $footerFile 푸터 파일 이름
      * @return void
      */
-    protected function view(string $viewerFile, string $headerFile = 'defaultHeader', string $footerFile = 'defaultFooter'): void
+    protected function view(string $viewerFile, array $variables = [], string $headerFile = 'defaultHeader', string $footerFile = 'defaultFooter'): void
     {
-        include_once $_SERVER['DOCUMENT_ROOT'] . '/View/template/' . $headerFile . '.php';
-        include_once $_SERVER['DOCUMENT_ROOT'] . '/View/' . $viewerFile . '.php';
-        include_once $_SERVER['DOCUMENT_ROOT'] . '/View/template/' . $footerFile . '.php';
+        // 전달할 값을 global 변수로 등록
+        foreach ($variables as $key => $value) {
+            $GLOBALS[$key] = $value;
+        }
+
+        // View 파일 생성
+        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/template/' . $headerFile . '.php';
+        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/' . $viewerFile . '.php';
+        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/template/' . $footerFile . '.php';
     }
 }
