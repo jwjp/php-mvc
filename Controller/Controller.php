@@ -46,8 +46,8 @@ abstract class Controller
         }
 
         // View 파일 생성
-        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/template/' . $headerFile . '.php';
-        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/' . $viewerFile . '.php';
-        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/template/' . $footerFile . '.php';
+        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/template/' . $headerFile . '.php';
+        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/' . $viewerFile . '.php';
+        include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/template/' . $footerFile . '.php';
     }
 }
