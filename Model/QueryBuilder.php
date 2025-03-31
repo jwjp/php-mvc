@@ -368,9 +368,9 @@ class QueryBuilder
 
         // 옵션으로 PASSWORD 값을 받은 경우, 쿼리 문자열에 직접 추가 되지않으므로 예외처리
         if (!$optionalValue || (strtoupper($optionalValue['option']) !== 'PASSWORD')) {
-            if ($combinators === 'or') {
+            if (strtoupper($combinators) === 'OR') {
                 $where .= ' OR (';
-            } else if ($combinators === 'end or') {
+            } else if (strtoupper($combinators) === 'END OR') {
                 $where .= ') AND ';
             } else {
                 $where .= ' AND ';

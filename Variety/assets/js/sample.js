@@ -29,6 +29,13 @@ client.subscribe('test/topic', { qos: 2 });
 client.publish('test/topic', 'Hello MQTT!', { qos: 2 });
 
 client.on('message', (topic, message) => {
+    let sample;
+    if ($('.sample-toggle').length === 0) {
+        sample = $(`<div class="sample-toggle">${message.toString()}</div>`).appendTo('body');
+    } else {
+        sample = $('.sample-toggle');
+    }
+    sample.fadeToggle().fadeToggle();
     console.log(message.toString());
 });
 

@@ -1,18 +1,12 @@
 <?php global $title, $content; ?>
-<div>
-    <?= $title ?><br/>
-    <?= $GLOBALS['title'] ?><br/>
-    <?= $content ?><br/>
-    <?= $GLOBALS['content'] ?>
-</div>
-
+<!--
 <div class="sample-box">
     <div class="card sample-card">
         <img src="/images/sample.png" class="card-img-top sample-img" alt="Sample">
 
         <div class="card-body">
             <h5 class="card-title">Card title</h5>
-            <p class="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
+            <p class="card-text">Some <?= $title ?> <?= $GLOBALS['title'] ?> <?= $content ?> <?= $GLOBALS['content'] ?> build on the card title and make up the bulk of the card's content.</p>
             <a href="#" class="btn btn-primary">Go somewhere</a>
         </div>
     </div>
@@ -34,3 +28,4 @@
         </div>
     </div>
 </div>
+-->

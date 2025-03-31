@@ -25,3 +25,15 @@ body {
 .sample-img {
     padding: 4rem;
 }
+
+.sample-toggle {
+    display: none;
+    width: 150px;
+    height: 25px;
+    border-radius: 15px;
+    border: 1px solid lightblue;
+    text-align: center;
+    font-size: 10px;
+    line-height: 24px;
+    color: lightblue;
+}
