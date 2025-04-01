@@ -27,6 +27,10 @@ abstract class Model
      * phpversion[] = "7.3"
      * phpversion[] = "7.4"
      * phpversion[] = "8.1"
+     *
+     * [MQTT]
+     * USERNAME = sample
+     * PASSWORD = sample
      */
     public function __construct()
     {

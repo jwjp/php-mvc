@@ -5,6 +5,22 @@ namespace Controller;
 abstract class Controller
 {
     /**
+     * 환경변수 설정값
+     *
+     * @var array|false $env
+     */
+    private array|false $env;
+
+    /**
+     * 환경변수에 접근 가능한 키값
+     *
+     * @var array|string[] $env_whitelist
+     */
+    private array $env_whitelist = [
+        'SAMPLE'
+    ];
+
+    /**
      * POST, PATCH, PUT, DELETE 메소드의 Body-Content
      *
      * @var array
@@ -22,11 +38,13 @@ abstract class Controller
     protected array $param;
 
     /**
+     * @param array|false $env 환경변수 설정값
      * @param array $body POST, PATCH, PUT, DELETE 메소드의 Body-Content
      * @param array $param 요청 URL에서 {} 값을 리소스에서 찾은 값
      */
-    public function __construct(array $body = [], array $param = [])
+    public function __construct(array|bool $env, array $body = [], array $param = [])
     {
+        $this->env = $env;
         $this->body = $body;
         $this->param = $param;
     }
@@ -49,5 +67,18 @@ abstract class Controller
         include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/template/' . $headerFile . '.php';
         include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/' . $viewerFile . '.php';
         include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/template/' . $footerFile . '.php';
+    }
+
+    /**
+     * @param string $key
+     * @return array|false
+     */
+    protected function getEnv(string $key): array|false
+    {
+        if (!in_array($key, $this->env_whitelist)) {
+            return false;
+        }
+
+        return $this->env[$key];
     }
 }

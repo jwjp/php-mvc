@@ -8,9 +8,26 @@ abstract class RouterImpl
 {
     protected function __construct()
     {
+        // TODO: 요청 & 응답 생명주기
+        // 미들웨어 > 가드 > 인터셉터 > 파이프 > 컨트롤러<>서비스 > 인터셉터 > 예외필터
+        // 1. 미들웨어 (전처리 작업 & 로그 기록)
+        // 2. 가드 (권한 인증)
+        // 3. 인터셉터 (요청 전/후 데이터 수정)
+        // 4. 파이프 (값 검증)
+        // 5. 예외 필터 (에러 처리 & 에러 로그 기록)
+
         // POST, GET, PATCH, PUT, DELETE 중 요청 온 메소드 함수 실행
         // execute() 실행 안되는 경우, analyse() 실행
-        $this->{strtolower($_SERVER['REQUEST_METHOD'])}()->analyse()->end();
+        $this->guard()->{strtolower($_SERVER['REQUEST_METHOD'])}()->analyse()->end();
+    }
+
+    /**
+     * JWT 등 인증처리
+     * TODO: Guard class
+     */
+    protected function guard(): static
+    {
+        return $this;
     }
 
     /**
@@ -87,10 +104,13 @@ abstract class RouterImpl
             $param[$matches[1][$idx]] = $url[$key];
         }
 
+        // 환경변수 설정값
+        $env = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/.sample.ini', true);
+
         // POST, PATCH, PUT, DELETE 메소드의 Body-Content
         $body = json_decode(file_get_contents('php://input'), true) ?: [];
 
-        (new $class($body, $param))->$function();
+        (new $class($env, $body, $param))->$function();
         exit;
     }
 
@@ -116,10 +136,13 @@ abstract class RouterImpl
         // 메소드가 있는지 확인
         if (empty($class) || empty($function) || !method_exists($class, $function)) return $this;
 
+        // 환경변수 설정값
+        $env = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/.sample.ini', true);
+
         // POST, PATCH, PUT, DELETE 메소드의 Body-Content
         $body = json_decode(file_get_contents('php://input'), true) ?: [];
 
-        (new $class($body))->$function();
+        (new $class($env, $body))->$function();
         exit;
     }
 

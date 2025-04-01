@@ -26,6 +26,8 @@ class TemporaryController extends Controller
             throw new RuntimeException('Authorization header not found or invalid.');
         }
 
+        var_dump($this->getEnv('DATABASE'));
+
         // JWT 예시 (Composer 사용해서 다운로드)
         $key = 'EXAMPLE_KEY';
         $iat = time();
@@ -42,5 +44,10 @@ class TemporaryController extends Controller
         // getID3 예시 (Composer 대신 직접 다운로드)
         $getID3 = new \getID3();
         $analyze = $getID3->analyze('D:\\Your\\Downloads\\Path\\sample.mp3');
+    }
+
+    function getEnvSample()
+    {
+        echo json_encode($this->getEnv('SAMPLE'), JSON_UNESCAPED_UNICODE);
     }
 }
