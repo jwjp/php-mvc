@@ -2,30 +2,22 @@
 
 namespace Controller;
 
+use JetBrains\PhpStorm\NoReturn;
+
 abstract class Controller
 {
     /**
-     * 환경변수 설정값
-     *
-     * @var array|false $env
+     * @var array|false $environments
      */
-    private array|false $env;
+    protected array|false $environments;
 
     /**
-     * 환경변수에 접근 가능한 키값
-     *
-     * @var array|string[] $env_whitelist
-     */
-    private array $env_whitelist = [
-        'SAMPLE'
-    ];
-
-    /**
+     * GET 메소드의 Query-String
      * POST, PATCH, PUT, DELETE 메소드의 Body-Content
      *
      * @var array
      */
-    protected array $body;
+    protected array $variables;
 
     /**
      * 요청 URL에서 {} 값을 리소스에서 찾은 값
@@ -35,18 +27,18 @@ abstract class Controller
      *
      * @var array
      */
-    protected array $param;
+    protected array $parameters;
 
     /**
-     * @param array|false $env 환경변수 설정값
-     * @param array $body POST, PATCH, PUT, DELETE 메소드의 Body-Content
-     * @param array $param 요청 URL에서 {} 값을 리소스에서 찾은 값
+     * @param array|false $environments .ini 환경변수 값
+     * @param array $variables POST, PATCH, PUT, DELETE 메소드의 Body-Content
+     * @param array $parameters 요청 URL에서 {} 값을 리소스에서 찾은 값
      */
-    public function __construct(array|bool $env, array $body = [], array $param = [])
+    public function __construct(array|false $environments = false, array $variables = [], array $parameters = [])
     {
-        $this->env = $env;
-        $this->body = $body;
-        $this->param = $param;
+        $this->environments = $environments;
+        $this->variables = $variables;
+        $this->parameters = $parameters;
     }
 
     /**
@@ -56,7 +48,7 @@ abstract class Controller
      * @param string $footerFile 푸터 파일 이름
      * @return void
      */
-    protected function view(string $viewerFile, array $variables = [], string $headerFile = 'defaultHeader', string $footerFile = 'defaultFooter'): void
+    #[NoReturn] protected function view(string $viewerFile, array $variables = [], string $headerFile = 'defaultHeader', string $footerFile = 'defaultFooter'): void
     {
         // 전달할 값을 global 변수로 등록
         foreach ($variables as $key => $value) {
@@ -67,18 +59,6 @@ abstract class Controller
         include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/template/' . $headerFile . '.php';
         include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/' . $viewerFile . '.php';
         include_once $_SERVER['DOCUMENT_ROOT'] . '/Variety/paint/template/' . $footerFile . '.php';
-    }
-
-    /**
-     * @param string $key
-     * @return array|false
-     */
-    protected function getEnv(string $key): array|false
-    {
-        if (!in_array($key, $this->env_whitelist)) {
-            return false;
-        }
-
-        return $this->env[$key];
+        exit;
     }
 }

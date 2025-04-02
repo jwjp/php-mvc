@@ -1,4 +1,6 @@
 <?php global $title, $content; ?>
+
+<!-- <?= $title ?> <?= $GLOBALS['title'] ?> <?= $content ?> <?= $GLOBALS['content'] ?> -->
 <!--
 <div class="sample-box">
     <div class="card sample-card">
@@ -6,7 +8,7 @@
 
         <div class="card-body">
             <h5 class="card-title">Card title</h5>
-            <p class="card-text">Some <?= $title ?> <?= $GLOBALS['title'] ?> <?= $content ?> <?= $GLOBALS['content'] ?> build on the card title and make up the bulk of the card's content.</p>
+            <p class="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
             <a href="#" class="btn btn-primary">Go somewhere</a>
         </div>
     </div>

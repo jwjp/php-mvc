@@ -16,7 +16,12 @@ class TemporaryController extends Controller
      */
     function test(): void
     {
-        var_dump($this->body);
+        /*
+        var_dump($this->variables);
+        var_dump($_FILES);
+        var_dump($this->parameters);
+        var_dump($this->environments);
+        */
 
         // 헤더에서 인증 토큰 가져오기
         $headers = getallheaders();
@@ -25,8 +30,6 @@ class TemporaryController extends Controller
         } else {
             throw new RuntimeException('Authorization header not found or invalid.');
         }
-
-        var_dump($this->getEnv('DATABASE'));
 
         // JWT 예시 (Composer 사용해서 다운로드)
         $key = 'EXAMPLE_KEY';
@@ -44,10 +47,5 @@ class TemporaryController extends Controller
         // getID3 예시 (Composer 대신 직접 다운로드)
         $getID3 = new \getID3();
         $analyze = $getID3->analyze('D:\\Your\\Downloads\\Path\\sample.mp3');
-    }
-
-    function getEnvSample()
-    {
-        echo json_encode($this->getEnv('SAMPLE'), JSON_UNESCAPED_UNICODE);
     }
 }

@@ -10,218 +10,140 @@ use Exception;
 class SampleController extends Controller
 {
     /**
-     * @return void
+     * @return false|int
      * @throws Exception
      */
-    public function createFoo(): void
+    public function createFoo(): false|int
     {
         $sample = new SampleModel();
-        $result = $sample->createFoo($this->body['message']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->createFoo($this->variables['message']);
     }
 
     /**
-     * @return void
+     * @return false|array
      * @throws Exception
      */
-    public function readFooById(): void
+    public function readFooById(): false|array
     {
         $sample = new SampleModel();
-        $foo = $sample->readFooById($this->param['fooId']);
-
-        echo json_encode($foo, JSON_UNESCAPED_UNICODE);
-
-        echo '<br/>';
-        echo '<br/>';
-
-        echo json_encode([
-            'class' => 'SampleController',
-            'function' => 'readFooById()',
-            'body-content' => $this->body,
-            'parameters' => $this->param
-        ], JSON_UNESCAPED_UNICODE);
+        return $sample->readFooById($this->parameters['fooId']);
     }
 
     /**
-     * @return void
+     * @return array|false
      */
-    public function readFooAll(): void
+    public function readFooAll(): array|false
     {
         $sample = new SampleModel();
-        $foo = $sample->readFooAll();
-
-        echo json_encode($foo, JSON_UNESCAPED_UNICODE);
-
-        echo '<br/>';
-        echo '<br/>';
-
-        echo json_encode([
-            'class' => 'SampleController',
-            'function' => 'readFooAll()',
-            'body-content' => $this->body,
-            'parameters' => $this->param
-        ], JSON_UNESCAPED_UNICODE);
+        return $sample->readFooAll();
     }
 
     /**
-     * @return void
+     * @return false|int
      * @throws Exception
      */
-    public function updateFooById(): void
+    public function updateFooById(): false|int
     {
         $sample = new SampleModel();
-        $result = $sample->updateFooById($this->body['message'], $this->param['id']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->updateFooById($this->variables['message'], $this->parameters['id']);
     }
 
     /**
-     * @return void
+     * @return false|int
      * @throws Exception
      */
-    public function deleteFooById(): void
+    public function deleteFooById(): false|int
     {
         $sample = new SampleModel();
-        $result = $sample->deleteFooById($this->param['id']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->deleteFooById($this->parameters['id']);
     }
 
     /**
-     * @return void
+     * @return false|int
      * @throws Exception
      */
-    public function createBarWithFooId(): void
+    public function createBarWithFooId(): false|int
     {
         $sample = new SampleModel();
-        $result = $sample->createBarWithFooId($this->body['comment'], $this->body['fooId']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->createBarWithFooId($this->variables['comment'], $this->variables['fooId']);
     }
 
     /**
-     * @return void
+     * @return false|array
      * @throws Exception
      */
-    public function readBarById(): void
+    public function readBarById(): false|array
     {
         $sample = new SampleModel();
-        $bar = $sample->readBarById($this->param['id']);
-
-        echo json_encode($bar, JSON_UNESCAPED_UNICODE);
+        return $sample->readBarById($this->parameters['id']);
     }
 
     /**
-     * @return void
+     * @return false|array
      */
-    public function readBarAll(): void
+    public function readBarAll(): false|array
     {
         $sample = new SampleModel();
-        $bar = $sample->readBarAll();
-
-        echo json_encode($bar, JSON_UNESCAPED_UNICODE);
+        return $sample->readBarAll();
     }
 
     /**
-     * @return void
+     * @return false|int
      * @throws Exception
      */
-    public function updateBarById(): void
+    public function updateBarById(): false|int
     {
         $sample = new SampleModel();
-        $result = $sample->updateBarById($this->body['comment'], $this->param['id']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->updateBarById($this->variables['comment'], $this->parameters['id']);
     }
 
     /**
-     * @return void
+     * @return false|int
      * @throws Exception
      */
-    public function deleteBarById(): void
+    public function deleteBarById(): false|int
     {
         $sample = new SampleModel();
-        $result = $sample->deleteBarById($this->param['id']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->deleteBarById($this->parameters['id']);
     }
 
     /**
-     * @return void
+     * @return array
      * @throws Exception
      */
-    public function readFooBarByFooIdWithQB(): void
+    public function readFooBarByFooIdWithQB(): array
     {
         $sample = new SampleModel();
-        $result = $sample->readFooBarByFooIdWithQB($this->param['fooId']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->readFooBarByFooIdWithQB($this->parameters['fooId']);
     }
 
     /**
-     * @return void
+     * @return false|int|array|string
      * @throws Exception
      */
-    public function createFooWithQB(): void
+    public function createFooWithQB(): false|int|array|string
     {
         $sample = new SampleModel();
-        $result = $sample->createFooWithQB($this->body['message']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->createFooWithQB($this->variables['message']);
     }
 
     /**
-     * @return void
+     * @return bool
      * @throws Exception
      */
-    public function createFooBarWithQB(): void
+    public function createFooBarWithQB(): bool
     {
         $sample = new SampleModel();
-        $result = $sample->createFooBarWithQB($this->body['fooMessage'], $this->body['barComment']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->createFooBarWithQB($this->variables['fooMessage'], $this->variables['barComment']);
     }
 
     /**
-     * @return void
+     * @return false|int|array|string
      * @throws Exception
      */
-    public function deleteFooByIdWithQB(): void
+    public function deleteFooByIdWithQB(): false|int|array|string
     {
         $sample = new SampleModel();
-        $result = $sample->deleteFooByIdWithQB($this->param['fooId']);
-
-        echo '<pre>';
-        echo '<h4>$result : </h4>';
-        var_dump($result);
-        echo '</pre>';
+        return $sample->deleteFooByIdWithQB($this->parameters['fooId']);
     }
 }

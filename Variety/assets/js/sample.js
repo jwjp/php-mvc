@@ -8,13 +8,6 @@ console.log(subtract(10, 4)); // 6
 console.log(PI); // 3.141592
 console.log(moment().format('YYYY-MM-DD'));
 
-// TODO: 환경변수 설정값을 브라우저로 확인하는 게 올바른가?
-fetch('/sample/temporary/getEnvSample')
-    .then(res => res.json())
-    .then(data => {
-        console.log(data);
-    })
-
 // MQTT 예시
 const options = {
     username: 'your-username', // MQTT 브로커 사용자 이름
