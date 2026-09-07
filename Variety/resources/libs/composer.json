@@ -1,6 +1,27 @@
 {
+    "name": "sample/php-mvc",
+    "description": "A small educational MVC web framework",
+    "license": "Unlicense",
     "require": {
-        "phpoffice/phpspreadsheet": "^4.1",
-        "firebase/php-jwt": "^6.11"
+        "php": ">=8.1",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*"
+    },
+    "require-dev": {
+        "ext-curl": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Controller\\": "../../../Controller/",
+            "Model\\": "../../../Model/"
+        }
+    },
+    "scripts": {
+        "test": ["@test:unit", "@test:smoke"],
+        "test:unit": "@php ../../../tests/unit.php",
+        "test:smoke": "@php ../../../tests/smoke.php",
+        "serve": "@php -S 127.0.0.1:8088 -t ../../../public ../../../dev-server.php"
     }
 }

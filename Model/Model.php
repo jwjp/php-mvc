@@ -12,40 +12,40 @@ abstract class Model
     protected PDO $pdo;
 
     /**
-     * 기본 설정 값
-     * 필요에 따라서 환경변수 지정 후 protected 변수로 사용
-     *
-     * e.g.
-     * [DATABASE]
-     * HOST = localhost
-     * DBNAME = sample
-     * USERNAME = root
-     * PASSWORD = root
-     *
-     * [SAMPLE]
-     * phpversion[] = "7.2"
-     * phpversion[] = "7.3"
-     * phpversion[] = "7.4"
-     * phpversion[] = "8.1"
-     *
-     * [MQTT]
-     * USERNAME = sample
-     * PASSWORD = sample
+     * 전달된 설정 또는 .sample.ini의 DATABASE 설정으로 PDO 연결
      */
-    public function __construct()
+    public function __construct(array|false $ini = false)
     {
-        $ini = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/.sample.ini', true);
+        if ($ini === false) {
+            $configPath = defined('APP_CONFIG_PATH')
+                ? APP_CONFIG_PATH
+                : dirname(__DIR__) . '/.sample.ini';
+            if (!is_file($configPath)) {
+                throw new \RuntimeException('.sample.ini 환경설정 파일을 찾을 수 없습니다.', 500);
+            }
+            $ini = parse_ini_file($configPath, true, INI_SCANNER_TYPED);
+        }
+        if ($ini === false) {
+            throw new \RuntimeException('.sample.ini 환경설정 파일을 찾을 수 없습니다.', 500);
+        }
+
+        foreach (['HOST', 'DBNAME', 'USERNAME', 'PASSWORD'] as $key) {
+            if (!isset($ini['DATABASE'][$key])) {
+                throw new \RuntimeException("DATABASE.{$key} 환경설정이 필요합니다.", 500);
+            }
+        }
+
         $this->pdo = new PDO(
-            "mysql:host={$ini['DATABASE']['HOST']};dbname={$ini['DATABASE']['DBNAME']}",
-            $ini['DATABASE']['USERNAME'],
-            $ini['DATABASE']['PASSWORD']
+            'mysql:host=' . $ini['DATABASE']['HOST'] . ';port=' . ($ini['DATABASE']['PORT'] ?? 3306)
+                . ';dbname=' . $ini['DATABASE']['DBNAME'] . ';charset=utf8mb4',
+            (string) $ini['DATABASE']['USERNAME'],
+            (string) $ini['DATABASE']['PASSWORD'],
+            [
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+            ]
         );
-
-        // PDO 기능이 아닌 데이터베이스 자체의 Prepared Statement 사용
-        $this->pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
-
-        // 에러가 발생하는 경우 Exception 던지도록 설정
-        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     }
 
     /**

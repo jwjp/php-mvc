@@ -1,0 +1,5 @@
+Options -Indexes -MultiViews
+
+RewriteEngine On
+RewriteRule ^index\.php$ - [END]
+RewriteRule ^ index.php [END,QSA]

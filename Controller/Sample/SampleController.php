@@ -15,8 +15,8 @@ class SampleController extends Controller
      */
     public function createFoo(): false|int
     {
-        $sample = new SampleModel();
-        return $sample->createFoo($this->variables['message']);
+        $sample = new SampleModel($this->environments);
+        return $sample->createFoo($this->stringInput('message'));
     }
 
     /**
@@ -25,8 +25,8 @@ class SampleController extends Controller
      */
     public function readFooById(): false|array
     {
-        $sample = new SampleModel();
-        return $sample->readFooById($this->parameters['fooId']);
+        $sample = new SampleModel($this->environments);
+        return $sample->readFooById($this->parameter('fooId'));
     }
 
     /**
@@ -34,7 +34,7 @@ class SampleController extends Controller
      */
     public function readFooAll(): array|false
     {
-        $sample = new SampleModel();
+        $sample = new SampleModel($this->environments);
         return $sample->readFooAll();
     }
 
@@ -44,8 +44,8 @@ class SampleController extends Controller
      */
     public function updateFooById(): false|int
     {
-        $sample = new SampleModel();
-        return $sample->updateFooById($this->variables['message'], $this->parameters['id']);
+        $sample = new SampleModel($this->environments);
+        return $sample->updateFooById($this->stringInput('message'), $this->parameter('fooId'));
     }
 
     /**
@@ -54,8 +54,8 @@ class SampleController extends Controller
      */
     public function deleteFooById(): false|int
     {
-        $sample = new SampleModel();
-        return $sample->deleteFooById($this->parameters['id']);
+        $sample = new SampleModel($this->environments);
+        return $sample->deleteFooById($this->parameter('fooId'));
     }
 
     /**
@@ -64,8 +64,8 @@ class SampleController extends Controller
      */
     public function createBarWithFooId(): false|int
     {
-        $sample = new SampleModel();
-        return $sample->createBarWithFooId($this->variables['comment'], $this->variables['fooId']);
+        $sample = new SampleModel($this->environments);
+        return $sample->createBarWithFooId($this->stringInput('comment'), $this->integerInput('fooId'));
     }
 
     /**
@@ -74,8 +74,8 @@ class SampleController extends Controller
      */
     public function readBarById(): false|array
     {
-        $sample = new SampleModel();
-        return $sample->readBarById($this->parameters['id']);
+        $sample = new SampleModel($this->environments);
+        return $sample->readBarById($this->parameter('barId'));
     }
 
     /**
@@ -83,7 +83,7 @@ class SampleController extends Controller
      */
     public function readBarAll(): false|array
     {
-        $sample = new SampleModel();
+        $sample = new SampleModel($this->environments);
         return $sample->readBarAll();
     }
 
@@ -93,8 +93,8 @@ class SampleController extends Controller
      */
     public function updateBarById(): false|int
     {
-        $sample = new SampleModel();
-        return $sample->updateBarById($this->variables['comment'], $this->parameters['id']);
+        $sample = new SampleModel($this->environments);
+        return $sample->updateBarById($this->stringInput('comment'), $this->parameter('barId'));
     }
 
     /**
@@ -103,8 +103,8 @@ class SampleController extends Controller
      */
     public function deleteBarById(): false|int
     {
-        $sample = new SampleModel();
-        return $sample->deleteBarById($this->parameters['id']);
+        $sample = new SampleModel($this->environments);
+        return $sample->deleteBarById($this->parameter('barId'));
     }
 
     /**
@@ -113,8 +113,8 @@ class SampleController extends Controller
      */
     public function readFooBarByFooIdWithQB(): array
     {
-        $sample = new SampleModel();
-        return $sample->readFooBarByFooIdWithQB($this->parameters['fooId']);
+        $sample = new SampleModel($this->environments);
+        return $sample->readFooBarByFooIdWithQB($this->parameter('fooId'));
     }
 
     /**
@@ -123,8 +123,8 @@ class SampleController extends Controller
      */
     public function createFooWithQB(): false|int|array|string
     {
-        $sample = new SampleModel();
-        return $sample->createFooWithQB($this->variables['message']);
+        $sample = new SampleModel($this->environments);
+        return $sample->createFooWithQB($this->stringInput('message'));
     }
 
     /**
@@ -133,8 +133,8 @@ class SampleController extends Controller
      */
     public function createFooBarWithQB(): bool
     {
-        $sample = new SampleModel();
-        return $sample->createFooBarWithQB($this->variables['fooMessage'], $this->variables['barComment']);
+        $sample = new SampleModel($this->environments);
+        return $sample->createFooBarWithQB($this->stringInput('fooMessage'), $this->stringInput('barComment'));
     }
 
     /**
@@ -143,7 +143,7 @@ class SampleController extends Controller
      */
     public function deleteFooByIdWithQB(): false|int|array|string
     {
-        $sample = new SampleModel();
-        return $sample->deleteFooByIdWithQB($this->parameters['fooId']);
+        $sample = new SampleModel($this->environments);
+        return $sample->deleteFooByIdWithQB($this->parameter('fooId'));
     }
 }

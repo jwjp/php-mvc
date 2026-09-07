@@ -7,14 +7,8 @@ use Controller\Sample\SampleViewController;
 
 class Router extends RouterImpl
 {
-    public function __construct()
-    {
-        parent::__construct();
-    }
-
     protected function post(): static
     {
-        // $this->execute('/foo', SampleController::class, 'createFoo');
         $this->execute('/foo', SampleController::class, 'createFooWithQB');
         $this->execute('/bar', SampleController::class, 'createBarWithFooId');
         $this->execute('/foobar', SampleController::class, 'createFooBarWithQB');
@@ -24,6 +18,8 @@ class Router extends RouterImpl
 
     protected function get(): static
     {
+        $this->execute('/', SampleViewController::class, 'index');
+        $this->execute('/csrf-token', SampleViewController::class, 'csrfToken');
         $this->execute('/foo', SampleController::class, 'readFooAll');
         $this->execute('/foo/{fooId}', SampleController::class, 'readFooById');
         $this->execute('/bar', SampleController::class, 'readBarAll');
@@ -32,11 +28,6 @@ class Router extends RouterImpl
 
         $this->execute('/sample/view', SampleViewController::class, 'index');
 
-        return $this;
-    }
-
-    protected function patch(): static
-    {
         return $this;
     }
 
@@ -50,7 +41,6 @@ class Router extends RouterImpl
 
     protected function delete(): static
     {
-        // $this->execute('/foo/{fooId}', SampleController::class, 'deleteFooById');
         $this->execute('/foo/{fooId}', SampleController::class, 'deleteFooByIdWithQB');
         $this->execute('/bar/{barId}', SampleController::class, 'deleteBarById');
 

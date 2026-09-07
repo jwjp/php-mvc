@@ -1,6 +1,13 @@
-.*
-!.gitignore
+.sample.ini
+.env
+.env.*
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+/tests/.artifacts/
 
 /Variety/resources/libs/*
 !/Variety/resources/libs/composer.json
-!/Variety/resources/libs/package.json
+!/Variety/resources/libs/composer.lock

@@ -3,25 +3,57 @@
 namespace Model\Sample;
 
 use Model\Model;
-use PDO, Exception;
+use Model\QueryBuilder;
+use PDO, Throwable;
+use Controller\HttpException;
 
 class SampleModel extends Model
 {
     /**
+     * @param string $value
+     * @param string $label
+     * @return string
+     * @throws HttpException
+     */
+    private function validateText(string $value, string $label = '메시지'): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            throw new HttpException('입력 값이 올바르지 않습니다.', 400);
+        }
+
+        if (!mb_check_encoding($value, 'UTF-8')) {
+            throw new HttpException('입력 값은 UTF-8 문자열이어야 합니다.', 400);
+        }
+        if (mb_strlen($value, 'UTF-8') > 150) {
+            throw new HttpException($label . '의 제한 길이 150자를 초과하였습니다.', 400);
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param int|string $id
+     * @return int
+     * @throws HttpException
+     */
+    private function validateId(int|string $id): int
+    {
+        if (!filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])) {
+            throw new HttpException('ID 값이 올바르지 않습니다.', 400);
+        }
+
+        return (int) $id;
+    }
+
+    /**
      * @param string $message
      * @return false|int
-     * @throws Exception
+     * @throws HttpException
      */
     public function createFoo(string $message): false|int
     {
-        if (empty($message)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
-
-        $message = htmlspecialchars($message, ENT_QUOTES);
-        if (strlen($message) >= 150) {
-            throw new Exception('메시지의 제한 길이 150자를 초과하였습니다.', 400);
-        }
+        $message = $this->validateText($message);
 
         $query = 'INSERT INTO foo SET message = :message';
         $stmt = $this->pdo->prepare($query);
@@ -38,13 +70,11 @@ class SampleModel extends Model
     /**
      * @param int $id
      * @return false|array
-     * @throws Exception
+     * @throws HttpException
      */
-    public function readFooById(int $id): false|array
+    public function readFooById(int|string $id): false|array
     {
-        if (empty($id)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $id = $this->validateId($id);
 
         $query = 'SELECT * FROM foo WHERE id = :id AND deleted_at IS NULL';
         $stmt = $this->pdo->prepare($query);
@@ -78,20 +108,14 @@ class SampleModel extends Model
      * @param string $message
      * @param int $id
      * @return false|int
-     * @throws Exception
+     * @throws HttpException
      */
-    public function updateFooById(string $message, int $id): false|int
+    public function updateFooById(string $message, int|string $id): false|int
     {
-        if (empty($id) || empty($message)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $id = $this->validateId($id);
+        $message = $this->validateText($message);
 
-        $message = htmlspecialchars($message, ENT_QUOTES);
-        if (strlen($message) >= 150) {
-            throw new Exception('메시지의 제한 길이 150자를 초과하였습니다.', 400);
-        }
-
-        $query = 'UPDATE foo SET message = :message, updated_at = NOW() WHERE id = :id';
+        $query = 'UPDATE foo SET message = :message, updated_at = NOW() WHERE id = :id AND deleted_at IS NULL';
         $stmt = $this->pdo->prepare($query);
         $execute = $stmt->execute([
             ':message' => $message,
@@ -104,68 +128,72 @@ class SampleModel extends Model
     /**
      * @param int $id
      * @return false|int
-     * @throws Exception
+     * @throws HttpException
      */
-    public function deleteFooById(int $id): false|int
+    public function deleteFooById(int|string $id): false|int
     {
-        if (empty($id)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $id = $this->validateId($id);
 
-        $query = 'UPDATE foo SET deleted_at = NOW() WHERE id = :id';
-        $stmt = $this->pdo->prepare($query);
-        $stmt->bindParam(':id', $id);
-
-        $result = false;
-        if ($stmt->execute()) {
+        try {
+            $this->pdo->beginTransaction();
+            $stmt = $this->pdo->prepare(
+                'UPDATE foo SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL'
+            );
+            $stmt->execute([':id' => $id]);
             $result = $stmt->rowCount();
-        }
 
-        return $result;
+            if ($result > 0) {
+                $stmt = $this->pdo->prepare(
+                    'UPDATE bar SET deleted_at = NOW() WHERE foo_id = :foo_id AND deleted_at IS NULL'
+                );
+                $stmt->execute([':foo_id' => $id]);
+            }
+
+            $this->pdo->commit();
+            return $result;
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
     }
 
     /**
      * @param string $comment
      * @param int $fooId
      * @return false|int
-     * @throws Exception
+     * @throws HttpException
      */
-    public function createBarWithFooId(string $comment, int $fooId): false|int
+    public function createBarWithFooId(string $comment, int|string $fooId): false|int
     {
-        if (empty($fooId) || empty($comment)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $fooId = $this->validateId($fooId);
+        $comment = $this->validateText($comment, '코멘트');
 
-        $comment = htmlspecialchars($comment, ENT_QUOTES);
-        if (strlen($comment) >= 150) {
-            throw new Exception('메시지의 제한 길이 150자를 초과하였습니다.', 400);
-        }
-
-        $query = 'INSERT INTO bar SET comment = :comment, foo_id = :foo_id';
-        $stmt = $this->pdo->prepare($query);
-        $stmt->bindParam(':comment', $comment);
-        $stmt->bindParam(':foo_id', $fooId);
-
-        $result = false;
-        if ($stmt->execute()) {
-            $result = $stmt->rowCount();
-        }
-
-        return $result;
+        return $this->queryBuilder()->transaction(function () use ($fooId, $comment): int {
+            // Lock the parent first, matching the soft-delete transaction's lock order.
+            $stmt = $this->pdo->prepare('SELECT id FROM foo WHERE id = :id AND deleted_at IS NULL FOR UPDATE');
+            $stmt->execute([':id' => $fooId]);
+            if ($stmt->fetchColumn() === false) {
+                throw new HttpException('연결할 foo를 찾을 수 없습니다.', 404);
+            }
+            $stmt = $this->pdo->prepare('INSERT INTO bar SET comment = :comment, foo_id = :foo_id');
+            $stmt->execute([':comment' => $comment, ':foo_id' => $fooId]);
+            return $stmt->rowCount();
+        });
     }
 
     /**
      * @param int $id
      * @return false|array
-     * @throws Exception
+     * @throws HttpException
      */
-    public function readBarById(int $id): false|array
+    public function readBarById(int|string $id): false|array
     {
-        if (empty($id)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $id = $this->validateId($id);
 
-        $query = 'SELECT * FROM bar WHERE id = :id AND deleted_at IS NULL';
+        $query = 'SELECT b.* FROM bar b INNER JOIN foo f ON f.id = b.foo_id '
+            . 'WHERE b.id = :id AND b.deleted_at IS NULL AND f.deleted_at IS NULL';
         $stmt = $this->pdo->prepare($query);
         $stmt->bindParam(':id', $id);
 
@@ -182,7 +210,8 @@ class SampleModel extends Model
      */
     public function readBarAll(): false|array
     {
-        $query = 'SELECT * FROM bar WHERE deleted_at IS NULL ORDER BY id DESC';
+        $query = 'SELECT b.* FROM bar b INNER JOIN foo f ON f.id = b.foo_id '
+            . 'WHERE b.deleted_at IS NULL AND f.deleted_at IS NULL ORDER BY b.id DESC';
         $stmt = $this->pdo->prepare($query);
 
         $result = false;
@@ -197,20 +226,16 @@ class SampleModel extends Model
      * @param string $comment
      * @param int $id
      * @return false|int
-     * @throws Exception
+     * @throws HttpException
      */
-    public function updateBarById(string $comment, int $id): false|int
+    public function updateBarById(string $comment, int|string $id): false|int
     {
-        if (empty($id) || empty($comment)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $id = $this->validateId($id);
+        $comment = $this->validateText($comment, '코멘트');
 
-        $comment = htmlspecialchars($comment, ENT_QUOTES);
-        if (strlen($comment) >= 150) {
-            throw new Exception('메시지의 제한 길이 150자를 초과하였습니다.', 400);
-        }
-
-        $query = 'UPDATE bar SET comment = :comment, updated_at = NOW() WHERE id = :id';
+        $query = 'UPDATE bar b INNER JOIN foo f ON f.id = b.foo_id '
+            . 'SET b.comment = :comment, b.updated_at = NOW() '
+            . 'WHERE b.id = :id AND b.deleted_at IS NULL AND f.deleted_at IS NULL';
         $stmt = $this->pdo->prepare($query);
         $execute = $stmt->execute([
             ':comment' => $comment,
@@ -223,15 +248,13 @@ class SampleModel extends Model
     /**
      * @param int $id
      * @return false|int
-     * @throws Exception
+     * @throws HttpException
      */
-    public function deleteBarById(int $id): false|int
+    public function deleteBarById(int|string $id): false|int
     {
-        if (empty($id)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $id = $this->validateId($id);
 
-        $query = 'UPDATE bar SET deleted_at = NOW() WHERE id = :id';
+        $query = 'UPDATE bar SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL';
         $stmt = $this->pdo->prepare($query);
         $stmt->bindParam(':id', $id);
 
@@ -246,82 +269,64 @@ class SampleModel extends Model
     /**
      * @param int $fooId
      * @return array
-     * @throws Exception
+     * @throws HttpException
      */
-    public function readFooBarByFooIdWithQB(int $fooId): array
+    public function readFooBarByFooIdWithQB(int|string $fooId): array
     {
-        if (empty($fooId)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $fooId = $this->validateId($fooId);
 
         $qb = $this->queryBuilder();
         return $qb->table('foo f')
             ->join('bar b', 'INNER', 'b.foo_id', '=', 'f.id')
             ->select('b.*')
-            ->where('b.foo_id', '=', [$fooId, 'EMAIL'])
+            ->where('b.foo_id', '=', [$fooId, 'NUMBER'])
             ->where('b.deleted_at', 'IS', 'NULL')
             ->where('f.deleted_at', 'IS', 'NULL')
             ->orderBy('b.id', 'DESC')
-            // ->exec();
-            ->debug();
+            ->exec();
     }
 
     /**
      * @param string $fooMessage
      * @param string $barComment
      * @return bool
-     * @throws Exception
+     * @throws HttpException
      */
     public function createFooBarWithQB(string $fooMessage, string $barComment): bool
     {
-        if (empty($fooMessage) || empty($barComment)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
+        $message = $this->validateText($fooMessage);
+        $comment = $this->validateText($barComment, '코멘트');
 
-        $message = htmlspecialchars($fooMessage, ENT_QUOTES);
-        $comment = htmlspecialchars($barComment, ENT_QUOTES);
-        if (strlen($message) >= 150 || strlen($comment) >= 150) {
-            throw new Exception('메시지의 제한 길이 150자를 초과하였습니다.', 400);
-        }
+        return $this->queryBuilder()->transaction(function (QueryBuilder $qb) use ($message, $comment): bool {
+            $fooId = $qb->table('foo')
+                ->insert([
+                    'message' => $message
+                ])
+                ->exec();
+            $qb->table('bar')
+                ->insert([
+                    'foo_id' => $fooId,
+                    'comment' => $comment
+                ])
+                ->exec();
 
-        $qb = $this->queryBuilder();
-        $qb->beginTransaction();
-
-        $fooId = $qb->table('foo')
-            ->insert([
-                'message' => $message
-            ])
-            ->exec();
-        $barId = $qb->table('bar')
-            ->insert([
-                'foo_id' => $fooId,
-                'comment' => $comment
-            ])
-            ->exec();
-
-        return $qb->commit();
+            return true;
+        });
     }
 
     /**
      * @param string $message
      * @return array|false|int|string
-     * @throws Exception
+     * @throws HttpException
      */
     public function createFooWithQB(string $message): false|array|int|string
     {
-        if (empty($message)) {
-            throw new Exception('입력 값이 올바르지 않습니다.', 400);
-        }
-
-        $msg = htmlspecialchars($message, ENT_QUOTES);
-        if (strlen($msg) >= 150) {
-            throw new Exception('메시지의 제한 길이 150자를 초과하였습니다.', 400);
-        }
+        $msg = $this->validateText($message);
 
         $qb = $this->queryBuilder();
         return $qb->table('foo')
             ->insert([
-                'message' => [$msg, 'ALPHABET']
+                'message' => $msg
             ])
             ->exec();
     }
@@ -329,20 +334,29 @@ class SampleModel extends Model
     /**
      * @param string $fooId
      * @return array|false|int|string
-     * @throws Exception
+     * @throws HttpException
      */
-    public function deleteFooByIdWithQB(string $fooId): false|array|int|string
+    public function deleteFooByIdWithQB(int|string $fooId): false|array|int|string
     {
-        $qb = $this->queryBuilder();
-        return $qb->table('foo')
-            ->update([
-                'deleted_at' => date('Y-m-d H:i:s')
-            ])
-            ->where('id', '=', $fooId)
-            ->debug();
-//        return $qb->table('foo')
-//            ->delete()
-//            ->where('id', '=', $fooId)
-//            ->exec();
+        $fooId = $this->validateId($fooId);
+
+        return $this->queryBuilder()->transaction(function (QueryBuilder $qb) use ($fooId): int {
+            $deletedAt = date('Y-m-d H:i:s');
+            $result = $qb->table('foo')
+                ->update(['deleted_at' => $deletedAt])
+                ->where('id', '=', [$fooId, 'NUMBER'])
+                ->where('deleted_at', 'IS', 'NULL')
+                ->exec();
+
+            if ($result > 0) {
+                $qb->table('bar')
+                    ->update(['deleted_at' => $deletedAt])
+                    ->where('foo_id', '=', [$fooId, 'NUMBER'])
+                    ->where('deleted_at', 'IS', 'NULL')
+                    ->exec();
+            }
+
+            return $result;
+        });
     }
 }

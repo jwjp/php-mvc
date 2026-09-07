@@ -3,13 +3,18 @@
 namespace Controller\Sample;
 
 use Controller\Controller;
-use JetBrains\PhpStorm\NoReturn;
+use Controller\Csrf;
+use Controller\Response;
 
 class SampleViewController extends Controller
 {
-    #[NoReturn] public function index(): void
+    public function index(): Response
     {
-        $variables = ['title' => 'Sample', 'content' => 'Sample Content'];
-        $this->view('sample/index', $variables);
+        return $this->view('sample/index', ['title' => 'PHP MVC', 'csrfToken' => Csrf::token()]);
+    }
+
+    public function csrfToken(): array
+    {
+        return ['token' => Csrf::token()];
     }
 }

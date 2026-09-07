@@ -2,929 +2,390 @@
 
 namespace Model;
 
-use PDO, Exception;
+use Controller\HttpException;
+use InvalidArgumentException;
+use LogicException;
+use PDO;
+use Throwable;
 
 class QueryBuilder
 {
-    /**
-     * MySQL 컨트롤을 위해 PDO 사용
-     * php.ini 에서 extension=pdo_mysql 활성화 되어 있는 지 확인 필요
-     *
-     * @var PDO
-     */
-    private PDO $pdo;
+    private string $table = '';
+    private string $operation = '';
+    private array $columns = [];
+    private array $joins = [];
+    private array $groups = [];
+    private array $orders = [];
+    private array $values = [];
+    private array $parameters = [];
+    private array $conditions = ['where' => '', 'having' => ''];
+    private array $depth = ['where' => 0, 'having' => 0];
+    private ?array $password = null;
+    private ?int $limit = null;
+    private ?int $offset = null;
 
-    /**
-     * 현재 실행중인 쿼리
-     *
-     * @var string
-     */
-    private string $inProgressQuery;
+    private const OPERATORS = ['=', '!=', '<>', '>', '>=', '<', '<=', 'LIKE', 'NOT LIKE',
+        'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN', 'IS', 'IS NOT'];
+    private const OPTIONS = ['PASSWORD', 'NUMBER', 'ALPHABET', 'PHONE', 'EMAIL'];
 
-    /**
-     * 쿼리 실행 전 호출한 모든 함수
-     *
-     * @var array
-     */
-    private array $callFunctionLog;
+    public function __construct(private PDO $pdo) {}
 
-    /**
-     * 테이블 이름
-     *
-     * @var string
-     */
-    private string $table;
-
-    /**
-     * 쿼리 실행 시, JOIN 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $join = '';
-
-    /**
-     * 쿼리 실행 시, SELECT 칼럼 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $select;
-
-    /**
-     * 쿼리 실행 시, GROUP BY 칼럼 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $groupByColumn;
-
-    /**
-     * 쿼리 실행 시, WHERE 조건절에 들어갈 문자열
-     * $this->whereMaker() 에서 만들어진 쿼리 문자열
-     *
-     * @var string
-     */
-    private string $where = '';
-
-    /**
-     * WHERE 조건 중, PASSWORD 옵션을 받은 경우 동일하게 암호화하여 비교가 불가하므로
-     * 우선 SELECT 검색 후 비교 할 Password 칼럼
-     *
-     * @var string
-     */
-    private string $wherePasswordColumn = '';
-
-    /**
-     * WHERE 조건 중, PASSWORD 옵션을 받은 경우 동일하게 암호화하여 비교가 불가하므로
-     * 우선 SELECT 검색 후 비교 할 Password 값
-     *
-     * @var string
-     */
-    private string $wherePasswordValue = '';
-
-    /**
-     * 쿼리 실행 시, INSERT / UPDATE / UPSERT 에서 SET 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $set = '';
-
-    /**
-     * 쿼리 실행 시, UPSERT 에서 ON DUPLICATE KEY UPDATE 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $upsertSet = '';
-
-    /**
-     * 쿼리 실행 시, Prepared 된 키 값과 바인딩 될 값
-     *
-     * @var array
-     */
-    private array $param = [];
-
-    /**
-     * 쿼리 실행 시, HAVING 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $having;
-
-    /**
-     * 쿼리 실행 시, ORDER BY 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $orderBy = '';
-
-    /**
-     * 쿼리 실행 시, LIMIT 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $limit;
-
-    /**
-     * 쿼리 실행 시, OFFSET 영역에 들어갈 문자열
-     *
-     * @var string
-     */
-    private string $offset;
-
-    /**
-     * 조건 연산자로 사용 할 수 있는 값
-     *
-     * @var array
-     */
-    private const USABLE_CONDITION = [
-        '>', '>=', '=', '!=', '<=', '<',
-        'IN', 'NOT IN',
-        'BETWEEN', 'NOT BETWEEN',
-        'IS', 'IS NOT',
-        'LIKE', 'NOT LIKE'
-    ];
-
-    /**
-     * JOIN 타입으로 사용 가능한 값
-     *
-     * @var array
-     */
-    private const USABLE_JOIN = [
-        'INNER',
-        'LEFT',
-        'RIGHT'
-    ];
-
-    /**
-     * WHERE 조건에서 값에 부여하는 옵션 종류
-     *
-     * @var array
-     */
-    private const USABLE_OPTION = [
-        'PASSWORD',
-        'NUMBER',
-        'ALPHABET',
-        'PHONE',
-        'EMAIL'
-    ];
-
-    /**
-     * @param PDO $pdo
-     */
-    public function __construct(PDO $pdo)
-    {
-        $this->pdo = $pdo;
-    }
-
-    /**
-     * 쿼리 실행 시, 사용 할 테이블 이름 적용
-     *
-     * @param string $table 테이블 이름
-     * @return $this 메소드 체인으로 사용 가능
-     */
     public function table(string $table): static
     {
+        $table = $this->aliased($table);
         $this->table = $table;
-
-        // 오토커밋 OFF 후 트랜잭션 직접 컨트롤 하는 경우
-        // 변수 중복 사용 방지를 위해서 테이블 마다 별도 초기화
-        $this->callFunctionLog = [];
-        $this->param = [];
-        $this->set = '';
-        $this->join = '';
-        $this->orderBy = '';
-        $this->wherePasswordColumn = '';
-        $this->wherePasswordValue = '';
-
-        $this->callFunctionLog[] = 'table';
-
+        $this->operation = '';
+        $this->columns = $this->joins = $this->groups = $this->orders = $this->values = $this->parameters = [];
+        $this->conditions = ['where' => '', 'having' => ''];
+        $this->depth = ['where' => 0, 'having' => 0];
+        $this->password = null;
+        $this->limit = $this->offset = null;
         return $this;
     }
 
-    /**
-     * 쿼리 실행 시, SELECT 에서 사용 할 칼럼 적용
-     *
-     * @param string ...$columns 칼럼 이름
-     * @return $this 메소드 체인으로 사용 가능
-     */
+    private function identifier(string $name, bool $wildcard = false): string
+    {
+        $parts = explode('.', trim($name));
+        foreach ($parts as $index => &$part) {
+            if ($wildcard && $part === '*' && $index === count($parts) - 1) {
+                continue;
+            }
+            if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $part)) {
+                throw new InvalidArgumentException('Invalid SQL identifier: ' . $name);
+            }
+            $part = '`' . $part . '`';
+        }
+        return implode('.', $parts);
+    }
+
+    private function expression(string $column): string
+    {
+        if (preg_match('/^(COUNT|SUM|AVG|MIN|MAX)\((\*|[A-Za-z_][A-Za-z0-9_.]*)\)$/iD', trim($column), $match)) {
+            if ($match[2] === '*' && strtoupper($match[1]) !== 'COUNT') {
+                throw new InvalidArgumentException('Only COUNT supports a wildcard.');
+            }
+            return strtoupper($match[1]) . '(' . $this->identifier($match[2], true) . ')';
+        }
+        return $this->identifier($column, true);
+    }
+
+    private function aliased(string $name, bool $expression = false): string
+    {
+        $parts = preg_split('/\s+(?:AS\s+)?/i', trim($name));
+        if (count($parts) > 2 || isset($parts[1]) && !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $parts[1])) {
+            throw new InvalidArgumentException('Invalid SQL alias.');
+        }
+        $sql = $expression ? $this->expression($parts[0]) : $this->identifier($parts[0]);
+        return $sql . (isset($parts[1]) ? ' AS ' . $this->identifier($parts[1]) : '');
+    }
+
+    private function operation(string $operation): void
+    {
+        if ($this->operation !== '' && $this->operation !== $operation) {
+            throw new LogicException('Start a new query with table() before changing the operation.');
+        }
+        $this->operation = $operation;
+    }
+
     public function select(string ...$columns): static
     {
-        $this->inProgressQuery = 'select';
-        $this->callFunctionLog[] = 'select';
-        $this->select = implode(', ', $columns);
-
+        $this->operation('select');
+        $this->columns = array_map(fn (string $column) => $this->aliased($column, true), $columns ?: ['*']);
         return $this;
     }
 
-    /**
-     * CRUD 작업 중 컬럼에 옵션이 적용되었는 지 확인
-     *
-     * @param mixed $value 칼럼 값 및 옵션
-     * @return array|false
-     */
-    private function optionalValue(mixed $value): false|array
+    private function option(mixed $value): ?array
     {
-        $result = false;
-        if (is_array($value) && count($value) === 2 && in_array(strtoupper($value[1]), self::USABLE_OPTION)) {
-            $result = [
-                'value' => $value[0],
-                'option' => $value[1]
-            ];
+        if (is_array($value) && array_is_list($value) && count($value) === 2
+            && is_string($value[1]) && in_array(strtoupper($value[1]), self::OPTIONS, true)) {
+            return [$value[0], strtoupper($value[1])];
         }
-
-        return $result;
+        return null;
     }
 
-    /**
-     * WHERE 및 HAVING 에서 사용 할 조건절 반환
-     *
-     * @param string $leftCondition WHERE 에서 왼쪽 조건, 보통은 칼럼 이름
-     * @param string $operator 조건 연산자
-     * @param int|string|array|null $rightCondition WHERE 에서 오른쪽 조건
-     * @param string $combinators AND, OR, END OR 사용 가능, OR 사용한 경우 END OR 필요
-     * @return string
-     * @throws Exception
-     */
-    private function whereMaker(string $leftCondition, string $operator, int|string|array|null $rightCondition, string $combinators = 'AND'): string
+    private function normalize(mixed $value): mixed
     {
-        $param = [];
-        $where = '';
-        if (!in_array(strtoupper($operator), self::USABLE_CONDITION)) {
-            throw new Exception('사용 할 수 없는 조건 연산자 입니다.', 500);
-        }
-
-        // 옵션이 들어있는 조건인지 확인
-        $optionalValue = $this->optionalValue($rightCondition);
-
-        switch (strtoupper($operator)) {
-            case 'IN':
-            case 'NOT IN':
-                if (!is_array($rightCondition)) {
-                    throw new Exception('IN/NOT IN 조건은 배열값을 필요로 합니다.');
-                }
-
-                $where .= $leftCondition . ' ' . $operator . ' ';
-                $where .= ' (';
-                foreach($rightCondition as $idx => $value) {
-                    $bindKey = ':' . md5(uniqid($leftCondition . $operator . $idx));
-
-                    // 바인딩 할 파라미터 별도 저장
-                    $param[$bindKey] = $value;
-
-                    $where .= $bindKey;
-                    if ($idx !== array_key_last($rightCondition)) {
-                        $where .= ', ';
-                    }
-                }
-                $where .= ') ';
-                break;
-            case 'BETWEEN':
-            case 'NOT BETWEEN':
-                if (!is_array($rightCondition)) {
-                    throw new Exception('BETWEEN/NOT BETWEEN 조건은 배열값을 필요로 합니다.');
-                }
-
-                $where .= $leftCondition . ' ' . $operator . ' ';
-                foreach($rightCondition as $idx => $value) {
-                    $bindKey = ':' . md5(uniqid($leftCondition . $operator . $idx));
-
-                    // 바인딩 할 파라미터 별도 저장
-                    $param[$bindKey] = $value;
-
-                    $where .= $bindKey;
-                    if ($idx !== array_key_last($rightCondition)) {
-                        $where .= ' AND ';
-                    }
-                }
-                break;
-            case 'IS':
-            case 'IS NOT':
-                $where .= $leftCondition . ' ' . $operator . ' ';
-
-                // IS, IS NOT 연산자는 바인딩 불가
-                $where .= $rightCondition ?? 'null';
-                break;
-            default:
-                $bindKey = ':' . md5(uniqid($leftCondition . $operator));
-
-                // 옵션에 따라 값 별도처리
-                if ($optionalValue) {
-                    switch (strtoupper($optionalValue['option'])) {
-                        case 'PASSWORD':
-                            // 암호화 : password_hash('PASSWORD', PASSWORD_DEFAULT)
-                            // 암호화 검증 : password_verify('PASSWORD', $hashValue)
-
-                            // SELECT 에서 패스워드는 마지막에 비교
-                            // 다른 조건으로 검색 후 결과가 1개인 경우에만 패스워드 비교
-                            $this->wherePasswordColumn = $leftCondition;
-                            $this->wherePasswordValue = $optionalValue['value'];
-                            break;
-                        case 'NUMBER':
-                            if (!is_numeric($optionalValue['value'])) {
-                                throw new Exception($optionalValue['value'] . ' 는 숫자 형태가 아닙니다.');
-                            }
-
-                            $where .= $leftCondition . ' ' . $operator . ' ';
-                            $param[$bindKey] = $optionalValue['value'];
-                            $where .= $bindKey;
-                            break;
-                        case 'ALPHABET':
-                            if (!ctype_alpha($optionalValue['value'])) {
-                                throw new Exception($optionalValue['value'] . ' 는 알파벳 형태가 아닙니다.');
-                            }
-
-                            $where .= $leftCondition . ' ' . $operator . ' ';
-                            $param[$bindKey] = $optionalValue['value'];
-                            $where .= $bindKey;
-                            break;
-                        case 'PHONE':
-                            if (!preg_match("/^[0-9]{3}-[0-9]{4}-[0-9]{4}$/", $optionalValue['value'])) {
-                                throw new Exception($optionalValue['value'] . ' 는 하이픈을 포함한 전화번호 형식이 아닙니다.');
-                            }
-
-                            $where .= $leftCondition . ' ' . $operator . ' ';
-                            $param[$bindKey] = $optionalValue['value'];
-                            $where .= $bindKey;
-                            break;
-                        case 'EMAIL':
-                            if (!(filter_var($optionalValue['value'], FILTER_VALIDATE_EMAIL) && preg_match('/@.+\./', $optionalValue['value']))) {
-                                throw new Exception($optionalValue['value'] . ' 는 이메일 형식이 아닙니다.');
-                            }
-
-                            $where .= $leftCondition . ' ' . $operator . ' ';
-                            $param[$bindKey] = $optionalValue['value'];
-                            $where .= $bindKey;
-                            break;
-                    }
-                } else {
-                    $where .= $leftCondition . ' ' . $operator . ' ';
-
-                    // 바인딩 할 파라미터 별도 저장
-                    $param[$bindKey] = $rightCondition;
-
-                    $where .= $bindKey;
-                }
-
-                break;
-        }
-
-        // 옵션으로 PASSWORD 값을 받은 경우, 쿼리 문자열에 직접 추가 되지않으므로 예외처리
-        if (!$optionalValue || (strtoupper($optionalValue['option']) !== 'PASSWORD')) {
-            if (strtoupper($combinators) === 'OR') {
-                $where .= ' OR (';
-            } else if (strtoupper($combinators) === 'END OR') {
-                $where .= ') AND ';
-            } else {
-                $where .= ' AND ';
+        $option = $this->option($value);
+        if ($option !== null) {
+            [$value, $type] = $option;
+            if (!is_scalar($value)) {
+                throw new InvalidArgumentException('Option values must be scalar.');
+            }
+            $valid = match ($type) {
+                'PASSWORD' => is_string($value) && $value !== '' && strlen($value) <= 72 && !str_contains($value, "\0"),
+                'NUMBER' => is_numeric($value),
+                'ALPHABET' => ctype_alpha((string) $value),
+                'PHONE' => preg_match('/^[0-9]{3}-[0-9]{4}-[0-9]{4}$/D', (string) $value) === 1,
+                'EMAIL' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
+            };
+            if (!$valid) {
+                throw new HttpException("Invalid {$type} value.");
+            }
+            if ($type === 'PASSWORD') {
+                $value = password_hash($value, PASSWORD_DEFAULT);
             }
         }
-
-        $this->param += $param;
-
-        return $where;
+        if ((!is_scalar($value) && $value !== null) || (is_float($value) && !is_finite($value))) {
+            throw new InvalidArgumentException('SQL values must be finite scalars or null.');
+        }
+        return $value;
     }
 
-    /**
-     * 쿼리 실행 시, WHERE 조건으로 사용 할 문자열
-     *
-     * @param string $leftCondition WHERE 에서 왼쪽 조건, 보통은 칼럼 이름
-     * @param string $operator 조건 연산자
-     * @param int|string|array|null $rightCondition WHERE 에서 오른쪽 조건
-     * @param string $combinators AND, OR, END OR 사용 가능, OR 사용한 경우 END OR 필요
-     * @return $this 메소드 체인으로 사용 가능
-     * @throws Exception
-     */
-    public function where(string $leftCondition, string $operator, int|string|array|null $rightCondition, string $combinators = 'AND'): static
+    private function bind(mixed $value): string
     {
-        $this->where .= $this->whereMaker($leftCondition, $operator, $rightCondition, $combinators);
-        $this->callFunctionLog[] = 'where';
+        $value = $this->normalize($value);
+        $key = ':p' . count($this->parameters);
+        $this->parameters[$key] = $value;
+        return $key;
+    }
 
+    private function condition(string $clause, string $column, string $operator, mixed $value, string $combinator): static
+    {
+        $left = $clause === 'having' ? $this->expression($column) : $this->identifier($column);
+        $operator = strtoupper(trim($operator));
+        $combinator = strtoupper(trim($combinator));
+        if (!in_array($operator, self::OPERATORS, true) || !in_array($combinator, ['AND', 'OR', 'END OR'], true)) {
+            throw new InvalidArgumentException('Invalid condition operator or combinator.');
+        }
+
+        // PASSWORD verifies a SELECT result; it must never disappear from a write predicate.
+        $option = in_array($operator, ['IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN'], true) ? null : $this->option($value);
+        if ($option !== null && $option[1] === 'PASSWORD') {
+            if ($clause !== 'where' || $operator !== '=' || $combinator !== 'AND' || $this->password !== null
+                || !is_string($option[0])) {
+                throw new InvalidArgumentException('PASSWORD requires one WHERE equality with AND.');
+            }
+            $this->password = [substr(strrchr('.' . trim($column), '.'), 1), $option[0]];
+            return $this;
+        }
+
+        if (in_array($operator, ['IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN'], true)) {
+            if (!is_array($value) || $value === [] || (str_contains($operator, 'BETWEEN') && count($value) !== 2)) {
+                throw new InvalidArgumentException('IN requires a nonempty array; BETWEEN requires two values.');
+            }
+            $bindings = array_map(fn ($item) => $this->bind($item), array_values($value));
+            $right = str_contains($operator, 'BETWEEN')
+                ? implode(' AND ', $bindings) : '(' . implode(', ', $bindings) . ')';
+        } elseif (in_array($operator, ['IS', 'IS NOT'], true)) {
+            $right = $value === null ? 'NULL' : (is_bool($value) ? ($value ? 'TRUE' : 'FALSE') : (is_string($value) ? strtoupper($value) : ''));
+            if (!in_array($right, ['NULL', 'TRUE', 'FALSE'], true)) {
+                throw new InvalidArgumentException('IS only accepts NULL, TRUE or FALSE.');
+            }
+        } elseif ($value === null) {
+            if (!in_array($operator, ['=', '!=', '<>'], true)) {
+                throw new InvalidArgumentException('Use = or != to compare null.');
+            }
+            $operator = $operator === '=' ? 'IS' : 'IS NOT';
+            $right = 'NULL';
+        } else {
+            $right = $this->bind($value);
+        }
+
+        if ($combinator === 'END OR' && $this->depth[$clause] === 0) {
+            throw new LogicException('END OR requires an open OR group.');
+        }
+        // Group the entire OR expression so earlier AND filters still apply.
+        $this->conditions[$clause] .= ($combinator === 'OR' ? '(' : '') . "{$left} {$operator} {$right}";
+        if ($combinator === 'OR') {
+            $this->conditions[$clause] .= ' OR ';
+            $this->depth[$clause]++;
+        } elseif ($combinator === 'END OR') {
+            $this->conditions[$clause] .= ') AND ';
+            $this->depth[$clause]--;
+        } else {
+            $this->conditions[$clause] .= ' AND ';
+        }
         return $this;
     }
 
-    /**
-     * 쿼리 실행 시, JOIN 으로 사용 할 쿼리 문자열
-     *
-     * @param string $table 테이블 이름
-     * @param string $joinType JOIN 타입 (INNER, LEFT, RIGHT)
-     * @param string $leftCondition JOIN ON 에서 왼쪽 조건, 보통은 칼럼 이름
-     * @param string $operator 조건 연산자
-     * @param int|string|array|null $rightCondition  JOIN ON 에서 오른쪽 조건
-     * @return $this 메소드 체인으로 사용 가능
-     * @throws Exception
-     */
-    public function join(string $table, string $joinType, string $leftCondition, string $operator, int|string|array|null $rightCondition): static
+    public function where(string $column, string $operator, mixed $value, string $combinators = 'AND'): static
     {
-        $this->callFunctionLog[] = 'join';
+        return $this->condition('where', $column, $operator, $value, $combinators);
+    }
 
-        if (!in_array(strtoupper($joinType), self::USABLE_JOIN)) {
-            throw new Exception('사용 할 수 없는 조인 타입입니다.');
+    public function having(string $column, string $operator, mixed $value, string $combinators = 'AND'): static
+    {
+        return $this->condition('having', $column, $operator, $value, $combinators);
+    }
+
+    public function join(string $table, string $joinType, string $leftCondition, string $operator, string $rightCondition): static
+    {
+        $joinType = strtoupper(trim($joinType));
+        $operator = strtoupper(trim($operator));
+        if (!in_array($joinType, ['INNER', 'LEFT', 'RIGHT'], true) || !in_array($operator, ['=', '!=', '<>', '<', '<=', '>', '>='], true)) {
+            throw new InvalidArgumentException('Invalid JOIN type or comparison.');
         }
-
-        if (!in_array(strtoupper($operator), self::USABLE_CONDITION)) {
-            throw new Exception('사용 할 수 없는 조건 연산자 입니다.', 500);
-        }
-
-        // JOIN (INNER), LEFT JOIN (OUTER), RIGHT JOIN (OUTER)
-        // JOIN 조건에는 preparedStatement 사용 불가
-        $this->join .= strtoupper($joinType) . ' JOIN ' . $table . ' ON ' . $leftCondition . ' ' . $operator . ' ' . $rightCondition . ' ';
-
+        $this->joins[] = $joinType . ' JOIN ' . $this->aliased($table) . ' ON '
+            . $this->identifier($leftCondition) . ' ' . $operator . ' ' . $this->identifier($rightCondition);
         return $this;
     }
 
-    /**
-     * 쿼리 실행 시, GROUP BY 으로 사용 할 쿼리 문자열
-     *
-     * @param string ...$columns 칼럼 아름
-     * @return $this 메소드 체인으로 사용 가능
-     */
     public function groupBy(string ...$columns): static
     {
-        $this->callFunctionLog[] = 'groupBy';
-        $this->groupByColumn = implode(', ', $columns);
-
+        $this->groups = array_map(fn (string $column) => $this->identifier($column), $columns);
         return $this;
     }
 
-    /**
-     * 쿼리 실행 시, HAVING 으로 사용 할 쿼리 문자열
-     *
-     * @param string $leftCondition HAVING 에서 왼쪽 조건, 보통은 칼럼 이름
-     * @param string $operator 조건 연산자
-     * @param int|string|array|null $rightCondition HAVING 에서 오른쪽 조건
-     * @param string $combinators AND, OR, END OR 사용 가능, OR 사용한 경우 END OR 필요
-     * @return $this 메소드 체인으로 사용 가능
-     * @throws Exception
-     */
-    public function having(string $leftCondition, string $operator, int|string|array|null $rightCondition, string $combinators = 'AND'): static
+    public function orderBy(string $column, string $order = 'ASC'): static
     {
-        $this->callFunctionLog[] = 'having';
-        $this->having = $this->whereMaker($leftCondition, $operator, $rightCondition, $combinators);
-
-        return $this;
-    }
-
-    /**
-     * 쿼리 실행 시, ORDER BY 으로 사용 할 쿼리 문자열
-     *
-     * @param string $column 칼럼 이름
-     * @param string $order 오름차순(ASC), 내림차순(DESC)
-     * @return $this 메소드 체인으로 사용 가능
-     */
-    public function orderBy(string $column, string $order): static
-    {
-        $this->callFunctionLog[] = 'orderBy';
-        if (!empty($this->orderBy)) {
-            $this->orderBy .= ', ';
+        $order = strtoupper(trim($order));
+        if (!in_array($order, ['ASC', 'DESC'], true)) {
+            throw new InvalidArgumentException('Sort direction must be ASC or DESC.');
         }
-
-        $this->orderBy .= ' ' . $column . ' ' . strtoupper($order);
-
+        $this->orders[] = $this->identifier($column) . ' ' . $order;
         return $this;
     }
 
-    /**
-     * 쿼리 실행 시, LIMIT 으로 사용 할 쿼리 문자열
-     *
-     * @param int $limit 숫자값
-     * @return $this 메소드 체인으로 사용 가능
-     */
     public function limit(int $limit): static
     {
-        $this->callFunctionLog[] = 'limit';
+        if ($limit < 0) {
+            throw new InvalidArgumentException('LIMIT must be nonnegative.');
+        }
         $this->limit = $limit;
-
         return $this;
     }
 
-    /**
-     * 쿼리 실행 시, OFFSET 으로 사용 할 쿼리 문자열
-     *
-     * @param int $offset 숫자값
-     * @return $this 메소드 체인으로 사용 가능
-     */
     public function offset(int $offset): static
     {
-        $this->callFunctionLog[] = 'offset';
+        if ($offset < 0) {
+            throw new InvalidArgumentException('OFFSET must be nonnegative.');
+        }
         $this->offset = $offset;
-
         return $this;
     }
 
-    /**
-     * 쿼리 실행 시, INSERT SET 구문에 사용 할 쿼리 스트링
-     *
-     * @param array $set 칼럼 이름 및 값을 MAP 형태의 배열로 작성
-     * @return $this 메소드 체인으로 사용 가능
-     * @throws Exception
-     */
-    public function insert(array $set): static
+    private function set(string $operation, array $values): static
     {
-        $this->inProgressQuery = 'insert';
-        $this->callFunctionLog[] = 'insert';
-
-        // 트랜잭션 중 $this->set 중복 사용 방지를 위해 임시 값 사용
-        $tempSet = '';
-
-        foreach ($set as $column => $value) {
-            $bindKey = ':' . md5(uniqid($column));
-
-            // 바인딩 할 파라미터 별도 저장
-            $this->param[$bindKey] = $value;
-
-            // 옵션이 들어있는 조건인지 확인
-            if ($optionalValue = $this->optionalValue($value)) {
-                switch (strtoupper($optionalValue['option'])) {
-                    case 'PASSWORD':
-                        // 암호화 : password_hash('PASSWORD', PASSWORD_DEFAULT)
-                        // 암호화 검증 : password_verify('PASSWORD', $hashValue)
-                        $this->param[$bindKey] = password_hash($optionalValue['value'], PASSWORD_DEFAULT);
-                        break;
-                    case 'NUMBER':
-                        if (!is_numeric($optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 숫자 형태가 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'ALPHABET':
-                        if (!ctype_alpha($optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 알파벳 형태가 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'PHONE':
-                        if (!preg_match("/^[0-9]{3}-[0-9]{4}-[0-9]{4}$/", $optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 하이픈을 포함한 전화번호 형식이 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'EMAIL':
-                        if (!(filter_var($optionalValue['value'], FILTER_VALIDATE_EMAIL) && preg_match('/@.+\./', $optionalValue['value']))) {
-                            throw new Exception($optionalValue['value'] . ' 는 이메일 형식이 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                }
-            }
-
-            $tempSet .= ($column . '=' . $bindKey);
-            if ($column !== array_key_last($set)) {
-                $tempSet .= ', ';
-            }
+        if ($values === [] || $this->values !== []) {
+            throw new InvalidArgumentException('Supply a nonempty value map once per query.');
         }
-
-        $this->set = $tempSet;
-
+        $normalized = [];
+        foreach ($values as $column => $value) {
+            if (!is_string($column) || str_contains($column, '.')) {
+                throw new InvalidArgumentException('SET requires unqualified column names.');
+            }
+            $normalized[$this->identifier($column)] = $this->normalize($value);
+        }
+        $this->operation($operation);
+        $this->values = $normalized;
         return $this;
     }
 
-    /**
-     * 쿼리 실행 시, UPSERT 구문으로 사용 할 쿼리 문자열
-     * Unique Key 값이 있어야 정상적으로 동작, 없는 경우 계속해서 INSERT 실행
-     * Unique Key 값이 있으면 INSERT 문에 있는 Unique Key 값을 기준으로 INSERT / UPDATE 자동으로 실행
-     *
-     * @param array $set 칼럼 이름 및 값을 MAP 형태의 배열로 작성
-     * @return $this 메소드 체인으로 사용 가능
-     * @throws Exception
-     */
-    public function upsert(array $set): static
-    {
-        $this->inProgressQuery = 'upsert';
-        $this->callFunctionLog[] = 'upsert';
+    public function insert(array $set): static { return $this->set('insert', $set); }
+    public function upsert(array $set): static { return $this->set('upsert', $set); }
+    public function update(array $set): static { return $this->set('update', $set); }
 
-        // 트랜잭션 중 $this->set 중복 사용 방지를 위해 임시 값 사용
-        $tempSet = '';
-        $tempUpsertSet = '';
-
-        foreach ($set as $column => $value) {
-            $bindKey = ':' . md5(uniqid($column));
-            $upsertKey = ':' . md5(uniqid($column, true));
-
-            // 바인딩 할 파라미터 별도 저장
-            $this->param[$bindKey] = $value;
-            $this->param[$upsertKey] = $value;
-
-            // 옵션이 들어있는 조건인지 확인
-            if ($optionalValue = $this->optionalValue($value)) {
-                switch (strtoupper($optionalValue['option'])) {
-                    case 'PASSWORD':
-                        // 암호화 : password_hash('PASSWORD', PASSWORD_DEFAULT)
-                        // 암호화 검증 : password_verify('PASSWORD', $hashValue)
-                        $this->param[$bindKey] = password_hash($optionalValue['value'], PASSWORD_DEFAULT);
-                        break;
-                    case 'NUMBER':
-                        if (!is_numeric($optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 숫자 형태가 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'ALPHABET':
-                        if (!ctype_alpha($optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 알파벳 형태가 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'PHONE':
-                        if (!preg_match("/^[0-9]{3}-[0-9]{4}-[0-9]{4}$/", $optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 하이픈을 포함한 전화번호 형식이 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'EMAIL':
-                        if (!(filter_var($optionalValue['value'], FILTER_VALIDATE_EMAIL) && preg_match('/@.+\./', $optionalValue['value']))) {
-                            throw new Exception($optionalValue['value'] . ' 는 이메일 형식이 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                }
-            }
-
-            $tempSet .= ($column . ' = ' . $bindKey);
-            $tempUpsertSet .= ($column . ' = ' . $upsertKey);
-            if ($column !== array_key_last($set)) {
-                $tempSet .= ', ';
-                $tempUpsertSet .= ', ';
-            }
-        }
-
-        $this->set = $tempSet;
-        $this->upsertSet = $tempUpsertSet;
-
-        return $this;
-    }
-
-    /**
-     * 쿼리 실행 시, UPDATE SET 구문에 사용 할 쿼리 스트링
-     *
-     * @param array $set 칼럼 이름 및 값을 MAP 형태의 배열로 작성
-     * @return $this 메소드 체인으로 사용 가능
-     * @throws Exception
-     */
-    public function update(array $set): static
-    {
-        $this->inProgressQuery = 'update';
-        $this->callFunctionLog[] = 'update';
-
-        // 트랜잭션 중 $this->set 중복 사용 방지를 위해 임시 값 사용
-        $tempSet = '';
-
-        foreach ($set as $column => $value) {
-            $bindKey = ':' . md5(uniqid($column));
-
-            // 바인딩 할 파라미터 별도 저장
-            $this->param[$bindKey] = $value;
-
-            // 옵션이 들어있는 조건인지 확인
-            if ($optionalValue = $this->optionalValue($value)) {
-                switch (strtoupper($optionalValue['option'])) {
-                    case 'PASSWORD':
-                        // 암호화 : password_hash('PASSWORD', PASSWORD_DEFAULT)
-                        // 암호화 검증 : password_verify('PASSWORD', $hashValue)
-                        $this->param[$bindKey] = password_hash($optionalValue['value'], PASSWORD_DEFAULT);
-                        break;
-                    case 'NUMBER':
-                        if (!is_numeric($optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 숫자 형태가 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'ALPHABET':
-                        if (!ctype_alpha($optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 알파벳 형태가 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'PHONE':
-                        if (!preg_match("/^[0-9]{3}-[0-9]{4}-[0-9]{4}$/", $optionalValue['value'])) {
-                            throw new Exception($optionalValue['value'] . ' 는 하이픈을 포함한 전화번호 형식이 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                    case 'EMAIL':
-                        if (!(filter_var($optionalValue['value'], FILTER_VALIDATE_EMAIL) && preg_match('/@.+\./', $optionalValue['value']))) {
-                            throw new Exception($optionalValue['value'] . ' 는 이메일 형식이 아닙니다.');
-                        }
-
-                        $this->param[$bindKey] = $optionalValue['value'];
-                        break;
-                }
-            }
-
-            $tempSet .= ($column . ' = ' . $bindKey);
-            if ($column !== array_key_last($set)) {
-                $tempSet .= ', ';
-            }
-        }
-
-        $this->set = $tempSet;
-
-        return $this;
-    }
-
-    /**
-     * 쿼리 실행 시, DELETE 구문 실행을 위한 함수
-     * 별도 파라미터는 불필요하고, where 함수를 통해서 조건절 작성
-     *
-     * @return $this 메소드 체인으로 사용 가능
-     */
     public function delete(): static
     {
-        $this->inProgressQuery = 'delete';
-        $this->callFunctionLog[] = 'delete';
-
+        $this->operation('delete');
         return $this;
     }
 
-    /**
-     * 오토커밋 OFF 및 트랜잭션 수동으로 시작
-     * 오토커밋 적용되어 있는 지 확인 필요 (SHOW VARIABLES LIKE 'autocommit')
-     * 오토커밋 적용되어 있는 경우, 오류 발생 시 자동으로 롤백처리
-     *
-     * @return bool
-     */
-    public function beginTransaction(): bool
+    public function beginTransaction(): bool { return $this->pdo->beginTransaction(); }
+    public function commit(): bool { return $this->pdo->commit(); }
+    public function rollBack(): bool { return $this->pdo->inTransaction() && $this->pdo->rollBack(); }
+
+    public function transaction(callable $callback): mixed
     {
-        return $this->pdo->beginTransaction();
+        $this->beginTransaction();
+        try {
+            $result = $callback($this);
+            $this->commit();
+            return $result;
+        } catch (Throwable $exception) {
+            $this->rollBack();
+            throw $exception;
+        }
     }
 
-    /**
-     * 트랜잭션 중 커밋
-     *
-     * @return bool
-     * @throws Exception
-     */
-    public function commit(): bool
+    /** Compilation is read-only, so debug() cannot change the next query. */
+    private function compile(): array
     {
-        // 트랜잭션 중인지 확인
-        if ($this->pdo->inTransaction()) {
-            return $this->pdo->commit();
+        if ($this->table === '' || $this->operation === '') {
+            throw new LogicException('Call table() and select(), insert(), upsert(), update() or delete().');
+        }
+        if ($this->depth['where'] !== 0 || $this->depth['having'] !== 0) {
+            throw new LogicException('Close every OR group with END OR.');
+        }
+        $where = preg_replace('/ AND $/', '', $this->conditions['where']);
+        $having = preg_replace('/ AND $/', '', $this->conditions['having']);
+        if ($this->password !== null && ($this->operation !== 'select' || $where === '' || str_contains($where, ' OR '))) {
+            throw new LogicException('PASSWORD only supports SELECT with additional AND conditions.');
+        }
+        if ($this->operation !== 'select' && ($this->joins || $this->groups || $having !== '' || $this->orders || $this->limit !== null || $this->offset !== null)) {
+            throw new LogicException('JOIN, GROUP BY, HAVING, ORDER BY, LIMIT and OFFSET require SELECT.');
+        }
+        if (in_array($this->operation, ['insert', 'upsert'], true) && $where !== '') {
+            throw new LogicException('INSERT and UPSERT do not accept WHERE.');
+        }
+        if (in_array($this->operation, ['update', 'delete'], true) && $where === '') {
+            throw new LogicException('UPDATE and DELETE require a WHERE condition.');
+        }
+
+        $parameters = $this->parameters;
+        if ($this->operation === 'select') {
+            $sql = 'SELECT ' . implode(', ', $this->columns) . ' FROM ' . $this->table;
+            if ($this->joins) { $sql .= ' ' . implode(' ', $this->joins); }
+            if ($where !== '') { $sql .= ' WHERE ' . $where; }
+            if ($this->groups) { $sql .= ' GROUP BY ' . implode(', ', $this->groups); }
+            if ($having !== '') { $sql .= ' HAVING ' . $having; }
+            if ($this->orders) { $sql .= ' ORDER BY ' . implode(', ', $this->orders); }
+            if ($this->limit !== null || $this->offset !== null) { $sql .= ' LIMIT ' . ($this->limit ?? '18446744073709551615'); }
+            if ($this->offset !== null) { $sql .= ' OFFSET ' . $this->offset; }
+        } elseif ($this->operation === 'delete') {
+            $sql = 'DELETE FROM ' . $this->table . ' WHERE ' . $where;
         } else {
-            throw new Exception('트랜잭션을 시작한 후에 커밋할 수 있습니다.', 500);
+            $set = $upsert = [];
+            foreach ($this->values as $column => $value) {
+                $key = ':p' . count($parameters);
+                $parameters[$key] = $value;
+                $set[] = $column . ' = ' . $key;
+                if ($this->operation === 'upsert') {
+                    $key = ':p' . count($parameters);
+                    $parameters[$key] = $value;
+                    $upsert[] = $column . ' = ' . $key;
+                }
+            }
+            $sql = ($this->operation === 'update' ? 'UPDATE ' : 'INSERT INTO ') . $this->table . ' SET ' . implode(', ', $set);
+            if ($this->operation === 'update') { $sql .= ' WHERE ' . $where; }
+            if ($upsert) { $sql .= ' ON DUPLICATE KEY UPDATE ' . implode(', ', $upsert); }
         }
+        return [$sql, $parameters];
     }
 
-    /**
-     * 쿼리 실행에 사용 할 쿼리 문자열 생성
-     *
-     * @return string 쿼리 문자열
-     * @throws Exception
-     */
-    private function queryMaker(): string
-    {
-        if (empty($this->table)) {
-            throw new Exception('테이블은 비울 수 없습니다.', 500);
-        }
-
-        // where 함수에서 만들어진 가장 마지막 AND 값은 제거
-        if (strlen($this->where) - strrpos($this->where, 'AND') === 4) {
-            $this->where = substr($this->where, 0, -4);
-        }
-
-        $query = '';
-        switch ($this->inProgressQuery) {
-            case 'select':
-                if (empty($this->select)) {
-                    throw new Exception('컬럼은 비울 수 없습니다.', 500);
-                }
-
-                $query = "SELECT {$this->select} FROM {$this->table}";
-
-                if (!empty($this->join)) {
-                    $query .= " {$this->join} ";
-                }
-                if (!empty($this->where)) {
-                    $query .= " WHERE {$this->where} ";
-                }
-                if (!empty($this->groupByColumn)) {
-                    $query .= " GROUP BY {$this->groupByColumn} ";
-                }
-                if (!empty($this->having)) {
-                    $query .= " HAVING {$this->having} ";
-                }
-                if (!empty($this->orderBy)) {
-                    $query .= " ORDER BY {$this->orderBy} ";
-                }
-                if (!empty($this->limit)) {
-                    $query .= " LIMIT {$this->limit} ";
-                }
-                if (!empty($this->offset)) {
-                    $query .= " OFFSET {$this->offset} ";
-                }
-                break;
-            case 'insert':
-                $query = "INSERT INTO {$this->table} SET {$this->set}";
-                break;
-            case 'upsert':
-                $query = "INSERT INTO {$this->table} SET {$this->set} ON DUPLICATE KEY UPDATE {$this->upsertSet}";
-                break;
-            case 'update':
-                if (!in_array('where', $this->callFunctionLog)) {
-                    throw new Exception('조건문이 반드시 포함되어야 합니다.', 500);
-                }
-
-                $query = "UPDATE {$this->table} SET {$this->set} WHERE {$this->where}";
-                break;
-            case 'delete':
-                if (!in_array('where', $this->callFunctionLog)) {
-                    throw new Exception('조건문이 반드시 포함되어야 합니다.', 500);
-                }
-
-                $query = "DELETE FROM {$this->table} WHERE {$this->where}";
-                break;
-        }
-
-        return $query;
-    }
-
-    /**
-     * 쿼리 문자열 생성 후 실행
-     *
-     * @return array|false|int|string array: SELECT, false: 쿼리 실행 실패, int: UPDATE / DELETE, string: INSERT / UPSERT
-     * @throws Exception
-     */
     public function exec(): false|array|int|string
     {
-        // 생성 된 쿼리 문자열
-        $query = $this->queryMaker();
-
-        $stmt = $this->pdo->prepare($query);
-
-        // 파라미터로 별도 저장해두었던 배열값 바인딩 처리
-        foreach ($this->param as $key => $value) {
-            $stmt->bindParam($key, $this->param[$key]);
+        [$sql, $parameters] = $this->compile();
+        $statement = $this->pdo->prepare($sql);
+        foreach ($parameters as $key => $value) {
+            $type = match (true) {
+                $value === null => PDO::PARAM_NULL,
+                is_bool($value) => PDO::PARAM_BOOL,
+                is_int($value) => PDO::PARAM_INT,
+                default => PDO::PARAM_STR,
+            };
+            $statement->bindValue($key, $value, $type);
         }
-
-        // 쿼리 실행
-        $execute = $stmt->execute();
-
-        $result = false;
-        if ($execute) {
-            switch ($this->inProgressQuery) {
-                case 'select':
-                    $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                    // SELECT WHERE 조건에서 옵션으로 PASSWORD 받은 경우
-                    // 다른 조건으로 먼저 검색 후, 검색 결과가 한 개의 열 일 때만 패스워드 비교 처리
-                    if (!empty($this->wherePasswordValue)) {
-                        if ($stmt->rowCount() !== 1) {
-                            throw new Exception('PASSWORD 검색은 단일 검색만 가능합니다.', 500);
-                        }
-
-                        // 패스워드 비교
-                        if (!password_verify($this->wherePasswordValue, $result[0][$this->wherePasswordColumn])) {
-                            $result = false;
-                        }
-                    }
-                    break;
-                case 'insert':
-                case 'upsert':
-                    $result = $this->pdo->lastInsertId();
-                    break;
-                case 'update':
-                case 'delete':
-                    $result = $stmt->rowCount();
-                    break;
+        $statement->execute();
+        if ($this->operation === 'select') {
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+            if ($this->password !== null) {
+                if ($rows === []) { return false; }
+                [$column, $password] = $this->password;
+                if (count($rows) !== 1 || !isset($rows[0][$column])) {
+                    throw new LogicException('PASSWORD requires one row containing the password column.');
+                }
+                if ($password === '' || strlen($password) > 72 || str_contains($password, "\0")
+                    || !password_verify($password, $rows[0][$column])) { return false; }
             }
+            return $rows;
         }
-
-        return $result;
+        return in_array($this->operation, ['insert', 'upsert'], true) ? $this->pdo->lastInsertId() : $statement->rowCount();
     }
 
-    /**
-     * MySQL 실행 로그 확인을 위해서는 설정 값 확인 필요
-     * SHOW VARIABLES LIKE 'general%'
-     * SET GLOBAL general_log = on
-     *
-     * @return array
-     * @throws Exception
-     */
     public function debug(): array
     {
-        // 생성 된 쿼리 문자열
-        $query = $this->queryMaker();
-
-        $stmt = $this->pdo->prepare($query);
-
-        // 파라미터로 별도 저장해두었던 배열값 바인딩 처리
-        foreach ($this->param as $key => $value) {
-            $stmt->bindParam($key, $this->param[$key]);
-        }
-
-        $return['query'] = $stmt->queryString;
-
-        ob_start();
-        $stmt->debugDumpParams();
-        $return['dump'] = ob_get_contents();
-        ob_end_clean();
-        return $return;
+        [$sql, $parameters] = $this->compile();
+        return ['query' => $sql, 'parameters' => $parameters, 'dump' => print_r($parameters, true)];
     }
 }

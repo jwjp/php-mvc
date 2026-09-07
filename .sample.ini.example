@@ -1,0 +1,13 @@
+[APP]
+DEBUG = false
+TIMEZONE = Asia/Seoul
+MAX_BODY_BYTES = 1048576
+; HTTPS terminating proxy: set true when the public site uses HTTPS.
+SESSION_SECURE = false
+
+[DATABASE]
+HOST = localhost
+PORT = 3306
+DBNAME = sample
+USERNAME = root
+PASSWORD = "root"
