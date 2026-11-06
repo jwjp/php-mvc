@@ -1,6 +1,6 @@
 # PHP MVC
 
-요청부터 DB 조회와 HTML·JSON 응답까지 직접 읽고 수정할 수 있는 작은 PHP MVC 프레임워크입니다. 명시적 라우팅, PDO 기반 Model, PHP View, QueryBuilder를 제공하며 별도의 프론트 빌드 없이 CRUD 샘플을 실행할 수 있습니다.
+요청부터 DB 조회와 HTML·JSON 응답까지 직접 읽고 수정할 수 있는 작은 PHP MVC 프레임워크입니다. 명시적 라우팅, PDO 기반 Model, PHP View, QueryBuilder를 제공하며 별도의 프론트 빌드 없이 회원 가입·로그인과 작성자별 권한이 있는 **게시판 예제**와 foo/bar JSON API 샘플을 실행할 수 있습니다.
 
 ## 빠른 시작
 
@@ -23,7 +23,7 @@ composer --working-dir=Variety/resources/libs install
 mysql -u root -p -e "source database/schema.sql"
 ~~~
 
-DB 스크립트는 `sample` 데이터베이스와 `foo`, `bar` 테이블을 생성하며 기존 테이블을 덮어쓰지 않습니다. 다른 DB 이름을 쓰려면 스크립트의 `CREATE DATABASE`, `USE`와 설정의 `DBNAME`을 함께 변경하세요.
+DB 스크립트는 `sample` 데이터베이스와 샘플용 `foo`, `bar`, 게시판용 `users`, `posts`, `comments` 테이블을 생성하며 기존 테이블을 덮어쓰지 않습니다. 다른 DB 이름을 쓰려면 스크립트의 `CREATE DATABASE`, `USE`와 설정의 `DBNAME`을 함께 변경하세요.
 
 3. 개발 서버를 실행합니다.
 
@@ -31,7 +31,7 @@ DB 스크립트는 `sample` 데이터베이스와 `foo`, `bar` 테이블을 생�
 composer --working-dir=Variety/resources/libs serve
 ~~~
 
-[http://127.0.0.1:8088/](http://127.0.0.1:8088/)에서 메시지·코멘트 생성, 조회, 수정, 삭제를 확인합니다. `/sample/view`도 같은 화면입니다. 다른 포트는 `php -S 127.0.0.1:8090 -t public dev-server.php`로 실행하세요.
+[http://127.0.0.1:8088/](http://127.0.0.1:8088/)에서 게시판을 엽니다. 회원 가입 후 글과 댓글을 써 보세요. foo/bar JSON API 샘플 화면은 [/sample/view](http://127.0.0.1:8088/sample/view)에 있습니다. 다른 포트는 `php -S 127.0.0.1:8090 -t public dev-server.php`로 실행하세요.
 
 ## 구조와 흐름
 
@@ -47,12 +47,14 @@ Controller/HttpException.php 공개 가능한 HTTP 오류
 Controller/Csrf.php          세션 토큰 생성과 검증
 Model/Model.php              PDO 연결
 Model/QueryBuilder.php       값 바인딩과 SQL 조립
-Controller/Sample/           샘플 컨트롤러
+Controller/Board/            게시판 예제 컨트롤러와 세션 로그인(Auth)
+Controller/Sample/           foo/bar JSON API 샘플 컨트롤러
+Model/Board/                 게시판 회원·글·댓글 Model과 입력 검증
 Model/Sample/                PDO·QueryBuilder 사용 예제
-Variety/paint/               PHP View와 공통 헤더·푸터
+Variety/paint/               PHP View와 공통 헤더·푸터 (board/, sample/, template/)
 Variety/assets/              공개 CSS, JS, 이미지, 폰트
 database/schema.sql         샘플 스키마
-tests/                      단위 테스트와 HTTP·MySQL 테스트
+tests/                      단위 테스트와 HTTP·MySQL 테스트 (support/에 공용 HTTP 도구)
 ~~~
 
 요청 파싱 → 라우트 선언 → middleware → guard → interceptor(before) → pipe → 라우트 매칭·CSRF 검증 → Controller / Model / View → interceptor(after) → filter → 응답.
@@ -117,10 +119,18 @@ public function index(): Response
 
 `view()`는 `Variety/paint` 안의 PHP 파일을 읽고 HTML 응답을 **반환**합니다. 반드시 컨트롤러에서도 `return`하세요. 기본 헤더·푸터는 `template/defaultHeader.php`, `template/defaultFooter.php`이며 세 번째·네 번째 인자로 이름을 바꿀 수 있습니다.
 
-View 변수는 별도 include scope로 전달됩니다. DB에는 원본 문자열을 저장하고 HTML 출력 시 escape하세요.
+View 변수는 별도 include scope로 전달됩니다. DB에는 원본 문자열을 저장하고 HTML 출력 시 escape하세요. 모든 View에는 escape 함수 `$e`가 들어 있습니다. 같은 이름의 View 변수를 넘겨도 `$e`는 바뀌지 않습니다.
 
 ~~~php
+<h1><?= $e($title) ?></h1>
+<!-- 위와 같은 결과 -->
 <h1><?= htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></h1>
+~~~
+
+폼을 처리한 뒤에는 `Response::redirect()`로 목록이나 상세 화면으로 이동하세요. 기본 상태는 `303`이라 새로고침해도 POST가 다시 전송되지 않습니다. 외부 주소로 보내지 않도록 `/`로 시작하는 사이트 내부 경로만 받습니다.
+
+~~~php
+return Response::redirect('/posts/' . $id);
 ~~~
 
 `Router`에서 필요한 hook만 override하고 `$this`를 반환하세요.
@@ -222,6 +232,42 @@ return $this->queryBuilder()->transaction(function (\Model\QueryBuilder $qb) {
 });
 ~~~
 
+## 게시판 예제
+
+프레임워크 자체에는 인증 기능이 없습니다. 게시판 예제는 lifecycle hook과 컨트롤러만으로 회원 가입, 로그인, 작성자별 권한을 만드는 방법을 보여 줍니다. 화면은 서버에서 그린 HTML 폼으로 동작하며 JavaScript는 삭제 확인에만 씁니다.
+
+| Method | Path | 동작 | 권한 |
+| --- | --- | --- | --- |
+| GET | `/` | 글 목록, `?page=`로 10개씩 | 누구나 |
+| GET | `/posts/{postId}` | 글과 댓글 | 누구나 |
+| GET·POST | `/posts/new`, `/posts` | 글쓰기 화면, 등록 | 로그인 |
+| GET·PUT | `/posts/{postId}/edit`, `/posts/{postId}` | 수정 화면, 저장 | 작성자 |
+| DELETE | `/posts/{postId}` | 글과 댓글 삭제 (soft delete) | 작성자 |
+| POST | `/posts/{postId}/comments` | 댓글 등록 | 로그인 |
+| DELETE | `/comments/{commentId}` | 댓글 삭제 | 작성자 |
+| GET·POST | `/signup`, `/login` | 가입, 로그인 | 누구나 |
+| POST | `/logout` | 로그아웃 | 누구나 |
+
+PUT·DELETE는 HTML 폼의 `_method` hidden input으로 보냅니다.
+
+요청은 다음 순서로 처리됩니다.
+
+1. **`Router::guard()`** 가 `Auth::load()`로 세션의 회원을 읽습니다. 화면별 권한은 여기서 판단하지 않습니다. guard는 어느 라우트가 선택될지 모르기 때문입니다.
+2. **컨트롤러**가 `Auth::require()`(로그인)나 `Auth::requireOwner($post)`(작성자)를 호출합니다. 조건이 맞지 않으면 `401`·`403` `HttpException`을 던집니다.
+3. **`Router::filter()`** 는 브라우저 요청(`Accept`에 `text/html`이 있음)의 오류를 HTML로 바꿉니다. `401`은 로그인 화면으로 보내고, 로그인 뒤 원래 화면으로 돌아오도록 경로를 세션에 저장합니다. 나머지 오류는 오류 화면으로 보여 줍니다. JSON API 요청의 오류는 기존처럼 JSON입니다.
+4. 입력 검증에 실패하면 입력값과 필드별 오류를 담아 폼을 `422`로 다시 그립니다. 성공하면 `303`으로 이동하고 알림 메시지를 세션에 한 번만 남깁니다.
+
+보안과 관련해 예제에서 처리한 내용입니다.
+
+- 비밀번호는 `password_hash()`로 저장하고 `password_verify()`로 비교합니다. bcrypt가 무시하는 72바이트를 넘는 비밀번호는 받지 않습니다.
+- 없는 아이디도 더미 해시와 비교해, 응답 시간과 메시지로 아이디 존재 여부를 알 수 없게 합니다.
+- 로그인·가입·로그아웃 때 `session_regenerate_id(true)`로 세션 ID를 바꾸고 CSRF 토큰도 새로 만듭니다.
+- 글과 댓글은 저장할 때 앞뒤 공백을 지우고 줄바꿈을 통일하며, 출력할 때 `$e()`로 escape합니다.
+- 댓글을 추가할 때 글 행을 `FOR UPDATE`로 잠가, 동시에 삭제된 글에 댓글이 남지 않게 합니다.
+- 목록의 댓글 수는 글마다 쿼리하지 않고 한 페이지 분량을 `IN`과 `GROUP BY`로 한 번에 셉니다.
+
+로그인 시도 횟수 제한, 비밀번호 재설정, 이메일 인증은 포함하지 않습니다. 공개 서비스에 쓰려면 함께 구현하세요.
+
 ## 샘플 API
 
 `foo`는 메시지, `bar`는 연결된 코멘트입니다. 문자열은 앞뒤 공백을 제거하고 UTF-8 기준 1~150자를 받습니다. ID는 양의 정수입니다.
@@ -286,6 +332,7 @@ composer --working-dir=Variety/resources/libs test
 
 - `test:unit`: DB 없이 입력 검증, SQL 식별자, 쿼리 상태, View·lifecycle, CSRF를 검사합니다.
 - `test:smoke`: 실제 HTTP 서버와 MySQL로 CRUD, CSRF, 요청 제한, 정적 파일 차단, soft delete, QueryBuilder 실행과 rollback, 운영 모드 오류 응답을 검사합니다.
+- `test:board`: 실제 HTTP 서버와 MySQL로 게시판의 가입, 로그인, 세션 교체, 글·댓글 작성과 escape, 작성자 권한, 페이지네이션을 검사합니다. 테스트가 만든 회원과 글은 종료 시 삭제합니다.
 
 테스트 DB 설정을 따로 준비하는 것을 권장합니다. `PHP_MVC_CONFIG`는 테스트와 자동 시작 서버 모두에 적용됩니다. 테스트가 만든 행은 종료 시 정리하고 QueryBuilder 상세 검사는 연결 전용 임시 테이블을 사용합니다. 테스트 계정에는 `CREATE TEMPORARY TABLES` 권한이 필요합니다.
 
@@ -301,8 +348,10 @@ composer --working-dir=Variety/resources/libs test
 - QueryBuilder의 raw SQL 식별자·표현식은 허용된 식별자 또는 PDO 쿼리로 바꾸세요. 쓰기 쿼리의 SELECT 전용 옵션은 예외를 발생시킵니다.
 - OR 그룹은 현재 조건부터 묶이도록 수정했습니다. 기존 OR 체인은 앞선 AND 필터와의 결합 결과를 확인하세요.
 - `/modules` 제공과 npm 의존성, 중복 autoloader를 제거했습니다. Composer 설치 후 자체 PHP·CSS·JS만으로 실행합니다.
+- `/`는 이제 게시판 목록입니다. foo/bar 샘플 화면은 `/sample/view`에서 엽니다. 기존 DB에는 `database/schema.sql`을 다시 실행해 게시판 테이블을 추가하세요.
+- View 변수 이름 `e`는 escape 함수로 예약되어 있습니다.
 
-인증·인가, ORM, DI 컨테이너, migration runner, template engine은 포함하지 않습니다. 기능을 추가할 때도 직접 읽을 수 있는 요청 흐름을 우선합니다.
+프레임워크에는 인증·인가, ORM, DI 컨테이너, migration runner, template engine이 포함되어 있지 않습니다. 인증·인가는 게시판 예제처럼 애플리케이션 코드에서 구현합니다. 기능을 추가할 때도 직접 읽을 수 있는 요청 흐름을 우선합니다.
 
 ## License
 

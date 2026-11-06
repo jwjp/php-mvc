@@ -19,9 +19,10 @@
         }
     },
     "scripts": {
-        "test": ["@test:unit", "@test:smoke"],
+        "test": ["@test:unit", "@test:smoke", "@test:board"],
         "test:unit": "@php ../../../tests/unit.php",
         "test:smoke": "@php ../../../tests/smoke.php",
+        "test:board": "@php ../../../tests/board.php",
         "serve": "@php -S 127.0.0.1:8088 -t ../../../public ../../../dev-server.php"
     }
 }

@@ -119,6 +119,8 @@ abstract class Controller
         $footerPath = $this->resolveViewFile($templateDirectory, $footerFile);
 
         $render = static function (array $__files, array $__variables): string {
+            // View에서 쓰는 HTML escape 함수입니다. EXTR_SKIP이므로 View 변수 e가 이 함수를 덮어쓰지 않습니다.
+            $e = static fn (mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             extract($__variables, EXTR_SKIP);
             ob_start();
             try {

@@ -7,6 +7,9 @@ use Controller\Csrf;
 use Controller\HttpException;
 use Controller\Response;
 use Controller\RouterImpl;
+use Model\Board\PostModel;
+use Model\Board\Text;
+use Model\Board\UserModel;
 use Model\QueryBuilder;
 
 require dirname(__DIR__) . '/Variety/resources/libs/vendor/autoload.php';
@@ -187,6 +190,39 @@ try {
         rejects(fn () => Csrf::verify($token), HttpException::class);
         $_SERVER['HTTP_SEC_FETCH_SITE'] = 'cross-site';
         rejects(fn () => Csrf::verify(Csrf::token()), HttpException::class);
+    });
+
+    test('redirects accept only local paths and send a Location header', function (): void {
+        $response = Response::redirect('/posts/1#comment-2');
+        check($response->status === 303 && $response->headers === ['Location' => '/posts/1#comment-2'], 'Redirect lost its target');
+        foreach (['https://example.com', '//example.com', '/\\example.com', 'posts', "/a\r\nSet-Cookie: x=1"] as $target) {
+            rejects(fn () => Response::redirect($target), InvalidArgumentException::class);
+        }
+        rejects(fn () => Response::redirect('/', 200), InvalidArgumentException::class);
+    });
+
+    test('board input is trimmed, normalized and length-checked by characters', function (): void {
+        $title = '  제목  ';
+        $body = "a\r\nb";
+        check(PostModel::postErrors($title, $body) === [] && $title === '제목' && $body === "a\nb", 'Input was not normalized');
+        $title = str_repeat('가', 100);
+        $body = 'ok';
+        check(PostModel::postErrors($title, $body) === [], '100 Korean characters must fit in a title');
+        $title = str_repeat('가', 101);
+        $body = "x\0y";
+        check(array_keys(PostModel::postErrors($title, $body)) === ['title', 'body'], 'Long titles and control characters must fail');
+        $title = "a\nb";
+        $body = ['array'];
+        check(array_keys(PostModel::postErrors($title, $body)) === ['title', 'body'], 'Multiline titles and arrays must fail');
+        check(Text::id('7') === 7 && Text::id('0') === null && Text::id('1e3') === null, 'IDs must be positive integers');
+
+        $loginId = ' Admin_1 ';
+        $name = '관리자';
+        check(UserModel::signupErrors($loginId, $name, 'password1', 'password1') === [] && $loginId === 'admin_1', 'Login IDs must be normalized');
+        $loginId = 'a-b';
+        check(array_keys(UserModel::signupErrors($loginId, $name, str_repeat('x', 73), '')) === ['loginId', 'password'], 'Invalid signup must fail');
+        $loginId = 'user';
+        check(array_keys(UserModel::signupErrors($loginId, $name, 'password1', 'password2')) === ['passwordConfirm'], 'Password confirmation must match');
     });
 } catch (Throwable $exception) {
     ob_end_clean();
