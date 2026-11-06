@@ -10,6 +10,7 @@
     <input id="login-password" name="password" type="password" autocomplete="current-password" required>
 
     <div class="form-actions">
+        <a href="/password/forgot">비밀번호를 잊으셨나요?</a>
         <a href="/signup">회원 가입</a>
         <button type="submit">로그인</button>
     </div>

@@ -11,7 +11,7 @@ class CommentController extends BoardController
     /** POST /posts/{postId}/comments */
     public function store(): Response
     {
-        $user = Auth::require();
+        $user = Auth::requireVerified();
         $post = $this->findPost($this->idParameter('postId'));
 
         $body = $this->text('body');

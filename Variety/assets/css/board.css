@@ -99,3 +99,14 @@ label { display: block; margin: 16px 0 6px; font-weight: 600; }
 @media (max-width: 560px) {
     .post-list .post-meta { margin-left: 0; width: 100%; }
 }
+
+.notice { margin-bottom: 20px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 14px; }
+.lead { margin: 8px 0 4px; color: var(--muted); }
+.section-title { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--line); }
+.account-info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 20px; margin: 20px 0 0; }
+.account-info dt { color: var(--muted); }
+.account-info dd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; overflow-wrap: anywhere; }
+.inline-form { display: inline; }
+.badge { padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); font-size: 12px; }
+.badge.warn { background: var(--surface); border: 1px solid var(--danger); color: var(--danger); }
+.form-actions a:first-child:not(:only-of-type) { margin-right: auto; }

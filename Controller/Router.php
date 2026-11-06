@@ -2,10 +2,12 @@
 
 namespace Controller;
 
+use Controller\Board\AccountController;
 use Controller\Board\Auth;
 use Controller\Board\AuthController;
 use Controller\Board\CommentController;
 use Controller\Board\ErrorController;
+use Controller\Board\PasswordController;
 use Controller\Board\PostController;
 use Controller\Sample\SampleController;
 use Controller\Sample\SampleViewController;
@@ -20,6 +22,10 @@ class Router extends RouterImpl
         $this->execute('/signup', AuthController::class, 'signup');
         $this->execute('/login', AuthController::class, 'login');
         $this->execute('/logout', AuthController::class, 'logout');
+        $this->execute('/account/password', AccountController::class, 'changePassword');
+        $this->execute('/account/verify-email', AccountController::class, 'resendVerification');
+        $this->execute('/password/forgot', PasswordController::class, 'sendResetLink');
+        $this->execute('/password/reset', PasswordController::class, 'reset');
 
         // foo/bar JSON API 샘플
         $this->execute('/foo', SampleController::class, 'createFooWithQB');
@@ -38,6 +44,10 @@ class Router extends RouterImpl
         $this->execute('/posts/{postId}/edit', PostController::class, 'edit');
         $this->execute('/signup', AuthController::class, 'signupForm');
         $this->execute('/login', AuthController::class, 'loginForm');
+        $this->execute('/account', AccountController::class, 'show');
+        $this->execute('/verify-email', AccountController::class, 'verifyEmail');
+        $this->execute('/password/forgot', PasswordController::class, 'forgotForm');
+        $this->execute('/password/reset', PasswordController::class, 'resetForm');
 
         // foo/bar JSON API 샘플
         $this->execute('/sample/view', SampleViewController::class, 'index');

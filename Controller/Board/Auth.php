@@ -16,7 +16,8 @@ final class Auth
     private static ?array $user = null;
 
     /**
-     * 세션의 회원 ID로 회원을 읽습니다. 탈퇴 등으로 회원이 없으면 로그인 상태를 지웁니다.
+     * 세션의 회원 ID로 회원을 읽습니다.
+     * 회원이 없거나 비밀번호가 바뀌어 session_version이 다르면 로그인 상태를 지웁니다.
      */
     public static function load(array $environments): void
     {
@@ -25,15 +26,14 @@ final class Auth
         if (!is_int($id)) {
             return;
         }
-        self::$user = (new UserModel($environments))->find($id);
-        if (self::$user === null) {
-            unset($_SESSION['userId']);
+        $user = (new UserModel($environments))->find($id);
+        if ($user === null || $user['session_version'] !== ($_SESSION['sessionVersion'] ?? null)) {
+            unset($_SESSION['userId'], $_SESSION['sessionVersion']);
+            return;
         }
+        self::$user = $user;
     }
 
-    /**
-     * @return array{id: int, login_id: string, display_name: string}|null
-     */
     public static function user(): ?array
     {
         return self::$user;
@@ -42,12 +42,25 @@ final class Auth
     /**
      * 로그인하지 않았으면 401을 던집니다. Router::filter()가 로그인 화면으로 보냅니다.
      *
-     * @return array{id: int, login_id: string, display_name: string}
      * @throws HttpException
      */
     public static function require(): array
     {
         return self::$user ?? throw new HttpException('로그인이 필요합니다.', 401);
+    }
+
+    /**
+     * 글과 댓글을 쓰려면 이메일 인증이 필요합니다.
+     *
+     * @throws HttpException
+     */
+    public static function requireVerified(): array
+    {
+        $user = self::require();
+        if ($user['email_verified_at'] === null) {
+            throw new HttpException('이메일 인증을 마친 뒤 글과 댓글을 쓸 수 있습니다. 내 정보에서 인증 메일을 다시 받을 수 있습니다.', 403);
+        }
+        return $user;
     }
 
     /**
@@ -70,6 +83,7 @@ final class Auth
         session_regenerate_id(true);
         unset($_SESSION['_csrf']);
         $_SESSION['userId'] = $user['id'];
+        $_SESSION['sessionVersion'] = $user['session_version'];
         self::$user = $user;
     }
 
@@ -78,5 +92,14 @@ final class Auth
         $_SESSION = [];
         session_regenerate_id(true);
         self::$user = null;
+    }
+
+    /**
+     * 시도 횟수 제한에 쓰는 클라이언트 IP입니다.
+     * 프록시 뒤에서는 웹서버가 REMOTE_ADDR을 실제 IP로 바꾸도록 설정하세요(X-Forwarded-For를 직접 믿지 않습니다).
+     */
+    public static function clientIp(): string
+    {
+        return (string) ($_SERVER['REMOTE_ADDR'] ?? '');
     }
 }

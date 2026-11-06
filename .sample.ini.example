@@ -4,6 +4,8 @@ TIMEZONE = Asia/Seoul
 MAX_BODY_BYTES = 1048576
 ; HTTPS terminating proxy: set true when the public site uses HTTPS.
 SESSION_SECURE = false
+; Absolute site URL used in e-mail links. Do not derive it from the Host header.
+BASE_URL = "http://127.0.0.1:8088"
 
 [DATABASE]
 HOST = localhost
@@ -11,3 +13,10 @@ PORT = 3306
 DBNAME = sample
 USERNAME = root
 PASSWORD = "root"
+
+[MAIL]
+; log: append messages to LOG_PATH (development). mail: send with PHP mail().
+TRANSPORT = log
+FROM = "PHP MVC <no-reply@example.test>"
+; Relative paths are resolved from the project root. Keep it outside public/.
+LOG_PATH = mail.log

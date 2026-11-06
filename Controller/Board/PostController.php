@@ -41,14 +41,14 @@ class PostController extends BoardController
     /** GET /posts/new */
     public function create(): Response
     {
-        Auth::require();
+        Auth::requireVerified();
         return $this->page('form', '새 글', ['post' => null, 'values' => ['title' => '', 'body' => '']]);
     }
 
     /** POST /posts */
     public function store(): Response
     {
-        $user = Auth::require();
+        $user = Auth::requireVerified();
         $title = $this->text('title');
         $body = $this->text('body');
         $errors = PostModel::postErrors($title, $body);

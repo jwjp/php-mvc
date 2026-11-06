@@ -1,6 +1,6 @@
 <div class="page-head">
     <h1>게시판 <span class="muted"><?= $e(number_format($total)) ?></span></h1>
-    <?php if ($currentUser !== null): ?>
+    <?php if ($currentUser !== null && $currentUser['email_verified_at'] !== null): ?>
         <a class="button" href="/posts/new">글쓰기</a>
     <?php endif ?>
 </div>

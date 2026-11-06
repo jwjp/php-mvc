@@ -218,11 +218,15 @@ try {
 
         $loginId = ' Admin_1 ';
         $name = '관리자';
-        check(UserModel::signupErrors($loginId, $name, 'password1', 'password1') === [] && $loginId === 'admin_1', 'Login IDs must be normalized');
+        $email = ' Admin@Example.TEST ';
+        check(UserModel::signupErrors($loginId, $name, $email, 'password1', 'password1') === [] && $loginId === 'admin_1', 'Login IDs must be normalized');
+        check($email === 'admin@example.test', 'E-mail addresses must be trimmed and lowercased');
         $loginId = 'a-b';
-        check(array_keys(UserModel::signupErrors($loginId, $name, str_repeat('x', 73), '')) === ['loginId', 'password'], 'Invalid signup must fail');
+        $email = "a@example.test\r\nBcc: x@example.test";
+        check(array_keys(UserModel::signupErrors($loginId, $name, $email, str_repeat('x', 73), '')) === ['loginId', 'email', 'password'], 'Invalid signup must fail');
         $loginId = 'user';
-        check(array_keys(UserModel::signupErrors($loginId, $name, 'password1', 'password2')) === ['passwordConfirm'], 'Password confirmation must match');
+        $email = 'user@example.test';
+        check(array_keys(UserModel::signupErrors($loginId, $name, $email, 'password1', 'password2')) === ['passwordConfirm'], 'Password confirmation must match');
     });
 } catch (Throwable $exception) {
     ob_end_clean();

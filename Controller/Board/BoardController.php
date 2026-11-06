@@ -8,6 +8,7 @@ use Controller\HttpException;
 use Controller\Response;
 use Model\Board\PostModel;
 use Model\Board\Text;
+use Model\Board\UserModel;
 
 /**
  * 게시판 화면 컨트롤러의 공통 기능.
@@ -62,6 +63,29 @@ abstract class BoardController extends Controller
     }
 
     private ?PostModel $posts = null;
+    private ?UserModel $users = null;
+
+    protected function users(): UserModel
+    {
+        return $this->users ??= new UserModel($this->environments);
+    }
+
+    /**
+     * 이메일 인증 링크를 보냅니다. 링크는 24시간 동안 한 번 쓸 수 있습니다.
+     */
+    protected function sendVerificationMail(array $user): void
+    {
+        $token = $this->users()->issueToken($user['id'], UserModel::VERIFY_EMAIL, 24 * 60);
+        $mailer = new Mailer($this->environments);
+        $mailer->send($user['email'], '[PHP MVC 게시판] 이메일 인증', implode("\n", [
+            $user['display_name'] . '님, 가입해 주셔서 감사합니다.',
+            '',
+            '아래 링크를 열면 이메일 인증이 끝납니다. 링크는 24시간 동안 한 번 쓸 수 있습니다.',
+            $mailer->url('/verify-email?token=' . $token),
+            '',
+            '가입한 적이 없다면 이 메일을 무시하세요.',
+        ]));
+    }
 
     /**
      * 한 요청 안에서는 DB 연결 하나를 재사용합니다.

@@ -43,7 +43,9 @@
         </ol>
     <?php endif ?>
 
-    <?php if ($currentUser !== null): ?>
+    <?php if ($currentUser !== null && $currentUser['email_verified_at'] === null): ?>
+        <p class="empty">이메일 인증을 마치면 댓글을 쓸 수 있습니다.</p>
+    <?php elseif ($currentUser !== null): ?>
         <form class="comment-form" method="post" action="/posts/<?= $e($post['id']) ?>/comments" novalidate>
             <input type="hidden" name="_csrf" value="<?= $e($csrfToken) ?>">
             <label for="comment-body">댓글 쓰기</label>

@@ -19,6 +19,11 @@ $error = static function (string $name) use ($errors, $e): string {
     <input id="displayName" name="displayName" autocomplete="nickname" required maxlength="30" value="<?= $e($values['displayName']) ?>" <?= $field('displayName') ?>>
     <?= $error('displayName') ?>
 
+    <label for="email">이메일</label>
+    <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" value="<?= $e($values['email']) ?>" <?= $field('email') ?>>
+    <?= $error('email') ?>
+    <p class="hint">인증 메일을 보냅니다. 인증을 마치면 글과 댓글을 쓸 수 있습니다.</p>
+
     <label for="password">비밀번호</label>
     <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8" <?= $field('password') ?>>
     <?= $error('password') ?>

@@ -1,6 +1,6 @@
 # PHP MVC
 
-요청부터 DB 조회와 HTML·JSON 응답까지 직접 읽고 수정할 수 있는 작은 PHP MVC 프레임워크입니다. 명시적 라우팅, PDO 기반 Model, PHP View, QueryBuilder를 제공하며 별도의 프론트 빌드 없이 회원 가입·로그인과 작성자별 권한이 있는 **게시판 예제**와 foo/bar JSON API 샘플을 실행할 수 있습니다.
+요청부터 DB 조회와 HTML·JSON 응답까지 직접 읽고 수정할 수 있는 작은 PHP MVC 프레임워크입니다. 명시적 라우팅, PDO 기반 Model, PHP View, QueryBuilder를 제공하며 별도의 프론트 빌드 없이 회원 가입, 이메일 인증, 로그인 시도 제한, 비밀번호 재설정과 작성자별 권한이 있는 **게시판 예제**와 foo/bar JSON API 샘플을 실행할 수 있습니다.
 
 ## 빠른 시작
 
@@ -23,7 +23,7 @@ composer --working-dir=Variety/resources/libs install
 mysql -u root -p -e "source database/schema.sql"
 ~~~
 
-DB 스크립트는 `sample` 데이터베이스와 샘플용 `foo`, `bar`, 게시판용 `users`, `posts`, `comments` 테이블을 생성하며 기존 테이블을 덮어쓰지 않습니다. 다른 DB 이름을 쓰려면 스크립트의 `CREATE DATABASE`, `USE`와 설정의 `DBNAME`을 함께 변경하세요.
+DB 스크립트는 `sample` 데이터베이스와 샘플용 `foo`, `bar`, 게시판용 `users`, `posts`, `comments`, `auth_tokens`, `rate_limits` 테이블을 생성하며 기존 테이블을 덮어쓰지 않습니다. 다른 DB 이름을 쓰려면 스크립트의 `CREATE DATABASE`, `USE`와 설정의 `DBNAME`을 함께 변경하세요.
 
 3. 개발 서버를 실행합니다.
 
@@ -31,7 +31,7 @@ DB 스크립트는 `sample` 데이터베이스와 샘플용 `foo`, `bar`, 게시
 composer --working-dir=Variety/resources/libs serve
 ~~~
 
-[http://127.0.0.1:8088/](http://127.0.0.1:8088/)에서 게시판을 엽니다. 회원 가입 후 글과 댓글을 써 보세요. foo/bar JSON API 샘플 화면은 [/sample/view](http://127.0.0.1:8088/sample/view)에 있습니다. 다른 포트는 `php -S 127.0.0.1:8090 -t public dev-server.php`로 실행하세요.
+[http://127.0.0.1:8088/](http://127.0.0.1:8088/)에서 게시판을 엽니다. 회원 가입 후 인증 메일의 링크를 열면 글과 댓글을 쓸 수 있습니다. 개발 설정(`MAIL.TRANSPORT = log`)에서는 메일을 보내지 않고 프로젝트 루트의 `mail.log`에 기록하므로, 그 파일에서 링크를 복사해 여세요. foo/bar JSON API 샘플 화면은 [/sample/view](http://127.0.0.1:8088/sample/view)에 있습니다. 다른 포트는 `php -S 127.0.0.1:8090 -t public dev-server.php`로 실행하세요.
 
 ## 구조와 흐름
 
@@ -247,6 +247,14 @@ return $this->queryBuilder()->transaction(function (\Model\QueryBuilder $qb) {
 | DELETE | `/comments/{commentId}` | 댓글 삭제 | 작성자 |
 | GET·POST | `/signup`, `/login` | 가입, 로그인 | 누구나 |
 | POST | `/logout` | 로그아웃 | 누구나 |
+| GET | `/verify-email?token=` | 메일 링크로 이메일 인증 | 누구나 |
+| GET | `/account` | 내 정보, 인증 상태 | 로그인 |
+| POST | `/account/verify-email` | 인증 메일 다시 보내기 (1분에 1번) | 로그인 |
+| POST | `/account/password` | 현재 비밀번호 확인 후 변경 | 로그인 |
+| GET·POST | `/password/forgot` | 재설정 링크 요청 | 누구나 |
+| GET·POST | `/password/reset?token=`, `/password/reset` | 새 비밀번호 저장 | 링크 소지자 |
+
+글쓰기와 댓글 쓰기는 이메일 인증을 마친 회원만 할 수 있습니다(`Auth::requireVerified()`).
 
 PUT·DELETE는 HTML 폼의 `_method` hidden input으로 보냅니다.
 
@@ -266,7 +274,28 @@ PUT·DELETE는 HTML 폼의 `_method` hidden input으로 보냅니다.
 - 댓글을 추가할 때 글 행을 `FOR UPDATE`로 잠가, 동시에 삭제된 글에 댓글이 남지 않게 합니다.
 - 목록의 댓글 수는 글마다 쿼리하지 않고 한 페이지 분량을 `IN`과 `GROUP BY`로 한 번에 셉니다.
 
-로그인 시도 횟수 제한, 비밀번호 재설정, 이메일 인증은 포함하지 않습니다. 공개 서비스에 쓰려면 함께 구현하세요.
+### 이메일 인증과 비밀번호 재설정
+
+- 가입하면 인증 링크를 보냅니다. 링크는 24시간, 재설정 링크는 30분 동안 한 번만 쓸 수 있습니다. 새 링크를 보내면 이전 링크는 무효가 됩니다.
+- 토큰은 `random_bytes(32)`로 만들어 메일로만 보내고, DB(`auth_tokens`)에는 SHA-256 해시만 저장합니다. 토큰을 쓰는 UPDATE는 `used_at IS NULL` 조건으로 한 번만 성공합니다.
+- 재설정 링크는 **인증한 이메일**에만 보냅니다. 인증하지 않은 주소는 다른 사람의 주소일 수 있기 때문입니다. 요청 결과와 관계없이 같은 메시지를 보여 줘 가입 여부를 알 수 없게 합니다.
+- 비밀번호를 바꾸거나 재설정하면 `users.session_version`이 올라갑니다. 세션에 저장한 값과 달라진 다른 기기의 로그인은 다음 요청에서 끊깁니다.
+- 메일 링크의 주소는 `APP.BASE_URL` 설정으로 만듭니다. 요청의 `Host` 헤더로 만들면 공격자가 링크를 자기 사이트로 바꿀 수 있습니다.
+
+### 시도 횟수 제한
+
+`rate_limits` 테이블에 시도를 기록하고 최근 기록 수로 막습니다. 아이디와 IP는 해시로만 저장하고, 하루 지난 기록은 새 기록을 남길 때 조금씩 지웁니다.
+
+| 대상 | 제한 |
+| --- | --- |
+| 같은 아이디의 로그인·현재 비밀번호 확인 실패 | 15분에 5번. 잠긴 동안은 맞는 비밀번호도 거부 (`429`) |
+| 같은 IP의 로그인 실패 | 15분에 30번 |
+| 같은 IP의 재설정 링크 요청 | 15분에 10번, 같은 회원에게는 1분에 1통 |
+| 인증 메일 다시 보내기 | 1분에 1번 |
+
+로그인에 성공하거나 비밀번호를 재설정하면 그 아이디의 실패 기록을 지웁니다. IP는 `REMOTE_ADDR`을 씁니다. 리버스 프록시 뒤라면 웹서버가 실제 클라이언트 IP로 바꾸도록 설정하세요. 앱이 `X-Forwarded-For`를 직접 믿으면 누구나 IP를 바꿔 제한을 피할 수 있습니다.
+
+이메일 주소 변경과 회원 탈퇴는 포함하지 않습니다.
 
 ## 샘플 API
 
@@ -298,6 +327,10 @@ PUT·DELETE는 HTML 폼의 `_method` hidden input으로 보냅니다.
 | `APP.MAX_BODY_BYTES` | 1048576, 요청 본문 최대 바이트 |
 | `APP.SESSION_SECURE` | false. 직접 HTTPS는 자동 적용; HTTPS 종료 프록시 뒤에서는 true |
 | `DATABASE.PORT` | 생략 시 3306 |
+| `APP.BASE_URL` | 메일 링크에 쓰는 사이트 절대 주소. 예: `https://board.example.com` |
+| `MAIL.TRANSPORT` | `log`(파일에 기록, 개발용) 또는 `mail`(PHP `mail()`, 서버의 sendmail 설정 필요) |
+| `MAIL.FROM` | 보내는 사람. 예: `"PHP MVC <no-reply@example.com>"` |
+| `MAIL.LOG_PATH` | `log` 전송의 파일 경로. 상대 경로는 프로젝트 루트 기준이며 `public/` 밖에 두세요 |
 
 비밀번호 등 문자열은 INI에서 큰따옴표로 감싸세요. 운영에서는 전용 DB 계정에 필요한 권한만 부여하고 PHP의 `display_errors=Off`, `post_max_size`와 웹서버 본문 제한을 함께 설정하세요. 앱 본문 제한은 PHP·웹서버 제한 이하로 두세요.
 
@@ -332,7 +365,7 @@ composer --working-dir=Variety/resources/libs test
 
 - `test:unit`: DB 없이 입력 검증, SQL 식별자, 쿼리 상태, View·lifecycle, CSRF를 검사합니다.
 - `test:smoke`: 실제 HTTP 서버와 MySQL로 CRUD, CSRF, 요청 제한, 정적 파일 차단, soft delete, QueryBuilder 실행과 rollback, 운영 모드 오류 응답을 검사합니다.
-- `test:board`: 실제 HTTP 서버와 MySQL로 게시판의 가입, 로그인, 세션 교체, 글·댓글 작성과 escape, 작성자 권한, 페이지네이션을 검사합니다. 테스트가 만든 회원과 글은 종료 시 삭제합니다.
+- `test:board`: 실제 HTTP 서버와 MySQL로 게시판의 가입, 이메일 인증, 로그인 시도 제한, 비밀번호 재설정·변경, 세션 교체, 글·댓글 작성과 escape, 작성자 권한, 페이지네이션을 검사합니다. `MAIL.TRANSPORT = log` 설정에서 메일 로그의 링크를 읽어 확인합니다. 테스트가 만든 회원, 글, 시도 기록은 종료 시 삭제합니다.
 
 테스트 DB 설정을 따로 준비하는 것을 권장합니다. `PHP_MVC_CONFIG`는 테스트와 자동 시작 서버 모두에 적용됩니다. 테스트가 만든 행은 종료 시 정리하고 QueryBuilder 상세 검사는 연결 전용 임시 테이블을 사용합니다. 테스트 계정에는 `CREATE TEMPORARY TABLES` 권한이 필요합니다.
 
